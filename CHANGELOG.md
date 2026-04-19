@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.2.8 - 2026-04-19
+
+- Added universal local input routing so the active player can switch between keyboard and controller at any time during maps, levels, equip cards, and menus.
+- Routed host-side remote menu input through Steam input frames, allowing guest button presses to drive Player Two interactions in overworld bubbles and shop-style internal menus.
+- Added fallback glyph text for Player Two prompts so interaction bubbles no longer render with an empty key when Rewired has no direct binding for that slot.
+
 ## v1.2.7 - 2026-04-19
 
 - Narrowed guest input remapping so only spawned PlayerInput components swap to the guest's local controls, avoiding global menu/input side effects.

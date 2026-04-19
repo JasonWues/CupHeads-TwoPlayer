@@ -18,6 +18,8 @@ Steam P2P multiplayer for Cuphead, plus a desktop installer that handles the mod
 - Host-authoritative scene syncing for level and menu transitions
 - Automatic host scene-follow so guests are pulled into the selected save/map when the host starts
 - Networked overworld handoff that spawns both native players, remaps guest controls onto Player Two, and syncs map movement before entering a level
+- Universal input routing so the local player can switch between keyboard and controller at any time without restarting the session
+- Remote menu input routing so guests can drive Player Two interactions in overworld prompts, equip cards, and shop-style internal menus while the host remains authoritative
 - Save compatibility checks with warnings for mismatched progress, DLC state, or setup
 - Live connection HUD with role, status, session info, and sync warnings
 - In-game session panel with `F8` toggle for quick diagnostics and session state
@@ -106,6 +108,10 @@ If the guest sees `REQUEST HOST SAVE`, press it once to ask the host for a fresh
 When the host starts, CupHeads sends an explicit launch scene and keeps watching host snapshots. If the guest falls behind or misses the first launch packet, the mod attempts to auto-follow the host scene instead of requiring a manual resync.
 
 During the Steam session, guests are mapped onto Cuphead's native Player Two slot. CupHeads remaps the guest's normal keyboard/controller input to that slot automatically, so the guest should move as Mugman on the map instead of loading as a frozen solo Cuphead.
+
+Keyboard and controller are both treated as live local inputs while a session is active. If a controller wakes up mid-run or Rewired assigns it to the other vanilla slot, CupHeads still routes it back to the local Steam player and keeps remote Player Two actions driven by the guest's Steam input frames.
+
+Internal scenes such as Porkrind's shop use the same routing path: the host remains the authority for scene transitions, while guest menu buttons are forwarded so Player Two can back out or interact instead of getting stuck on a mismatched local menu.
 
 ## Building from source
 

@@ -168,6 +168,11 @@ namespace CupheadOnline
             PatchSafe(harmony, typeof(PlayerMotorPatch));
             PatchSafe(harmony, typeof(MapPlayerMotorPatch));
             PatchSafe(harmony, typeof(MapPlayerAnimationPatch));
+            PatchSafe(harmony, typeof(RewiredPlayerGetAxisPatch));
+            PatchSafe(harmony, typeof(RewiredPlayerGetButtonPatch));
+            PatchSafe(harmony, typeof(RewiredPlayerGetButtonDownPatch));
+            PatchSafe(harmony, typeof(RewiredPlayerGetButtonUpPatch));
+            PatchSafe(harmony, typeof(CupheadInputDisplayForButtonPatch));
             PatchSafe(harmony, typeof(PlayerInputAxisPatch));
             PatchSafe(harmony, typeof(PlayerInputAxisIntPatch));
             PatchSafe(harmony, typeof(PlayerInputButtonPatch));
@@ -206,6 +211,7 @@ namespace CupheadOnline
             MainThreadQueue.Drain();
             Net?.Poll();
             MultiplayerSession.EnsureCupheadMultiplayerState();
+            ClientInputFramePump.Update();
             EnemySyncManager.HostTick();
             ExtraRemoteAvatarManager.Update();
             ExtraParticipantDamageBridge.Update();
@@ -272,6 +278,6 @@ namespace CupheadOnline
     {
         public const string GUID    = "com.cupheadonline.mod";
         public const string NAME    = "CupHeads";
-        public const string VERSION = "1.2.7";
+        public const string VERSION = "1.2.8";
     }
 }

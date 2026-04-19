@@ -25,18 +25,13 @@ namespace CupheadOnline.Patches
     {
         static void Postfix(PlayerInput __instance, PlayerId playerId)
         {
-            if (!MultiplayerSession.IsActive || !MultiplayerSession.IsClient)
+            if (!MultiplayerSession.IsActive)
                 return;
 
             if (__instance == null)
                 return;
 
-            PlayerId inputSource = playerId;
-            if (playerId == PlayerId.PlayerTwo)
-                inputSource = PlayerId.PlayerOne;
-            else if (playerId == PlayerId.PlayerOne)
-                inputSource = PlayerId.PlayerTwo;
-            else
+            if (playerId != PlayerId.PlayerOne && playerId != PlayerId.PlayerTwo)
                 return;
 
             try
@@ -45,13 +40,13 @@ namespace CupheadOnline.Patches
                 if (getter == null)
                     return;
 
-                var actions = getter.Invoke(null, new object[] { inputSource });
+                var actions = getter.Invoke(null, new object[] { playerId });
                 Traverse.Create(__instance).Property("actions").SetValue(actions);
             }
             catch
             {
-                // Rewired is not referenced by the mod directly; keep this
-                // reflection-only so global menu input is not swapped by accident.
+                // Rewired is not referenced by the mod directly. The universal
+                // input router handles device switching and remote overrides.
             }
         }
     }

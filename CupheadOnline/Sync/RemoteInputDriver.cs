@@ -85,6 +85,17 @@ namespace CupheadOnline.Sync
             return currentPressed && !previousPressed;
         }
 
+        public static bool WasReleasedThisFrame(byte participantId, CupheadButton button)
+        {
+            RemoteInputState state;
+            if (!_states.TryGetValue(participantId, out state) || !state.HasData)
+                return false;
+
+            bool currentPressed = state.Current.IsPressed(button);
+            bool previousPressed = state.Previous.IsPressed(button);
+            return !currentPressed && previousPressed;
+        }
+
         public static bool IsPressed(byte participantId, CupheadButton button)
         {
             RemoteInputState state;
