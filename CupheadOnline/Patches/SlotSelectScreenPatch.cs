@@ -1182,7 +1182,7 @@ namespace CupheadOnline.Patches
                         ? BuildLobbyCharacterLabel()
                         : (SessionSync.CanGuestToggleReady
                             ? (SessionSync.IsLocalReady ? "UNREADY" : "READY UP")
-                            : "WAIT FOR SAVE"))
+                            : "REQUEST HOST SAVE"))
                     : _joinOverlayReady
                         ? "OPEN FRIENDS"
                         : TryGetClipboardLobbyId(out clipboardRaw, out clipboardLobbyId)
@@ -1274,7 +1274,7 @@ namespace CupheadOnline.Patches
                             return SessionSync.CompatibilitySummary;
 
                         if (!SessionSync.HasTrackedSave)
-                            return "Stay here while the host picks a save.";
+                            return "Ask the host for the current save selection again. This fixes missed lobby sync packets.";
 
                         return SessionSync.IsLocalReady
                             ? "You are ready. Wait for the host to start the run."
@@ -1347,7 +1347,7 @@ namespace CupheadOnline.Patches
 
                 case MpMenuState.JoinIndex:
                     if (Plugin.Net.IsConnected)
-                        return Plugin.Net.IsHost || SessionSync.CanGuestToggleReady;
+                        return Plugin.Net.IsHost || SessionSync.CanGuestToggleReady || !SessionSync.HasTrackedSave;
                     return !_waitingForInvite
                         && !Plugin.Net.IsInputLocked
                         && !Plugin.Net.IsConnected
@@ -1534,6 +1534,12 @@ namespace CupheadOnline.Patches
                             {
                                 if (Plugin.Net.IsHost)
                                     OnToggleHostLeadCharacter(inst);
+                                else if (!SessionSync.HasTrackedSave)
+                                {
+                                    string status;
+                                    Plugin.Net.TryRequestRecovery(out status);
+                                    MpMenuState.SetStatus(status, animate: false);
+                                }
                                 else
                                     MpMenuState.SetStatus(SessionSync.ToggleGuestReady(), animate: false);
                             }

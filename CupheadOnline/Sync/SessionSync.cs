@@ -82,6 +82,12 @@ namespace CupheadOnline.Sync
             {
                 if (Time.unscaledTime >= _nextHostSnapshotAt)
                 {
+                    if (_hasTrackedSave && !_remoteGuestReady)
+                    {
+                        RebroadcastTrackedSaveSelection();
+                        BroadcastSelectedSaveProfile();
+                    }
+
                     BroadcastSessionSnapshot(true);
                     _nextHostSnapshotAt = Time.unscaledTime + 1f;
                 }
@@ -327,6 +333,23 @@ namespace CupheadOnline.Sync
                 return;
 
             BroadcastSaveProfile(_trackedSaveSlot, _trackedMapScene, _trackedSaveEmpty);
+        }
+
+        public static void RebroadcastTrackedSaveSelection()
+        {
+            if (!_hasTrackedSave || Plugin.Net == null || !Plugin.Net.IsConnected || !MultiplayerSession.IsHost)
+                return;
+
+            var pkt = new SaveSlotSyncPacket
+            {
+                SlotIndex = _trackedSaveSlot,
+                Flags = (byte)((_trackedSaveEmpty ? 1 : 0) | (GetTrackedPlayer1IsMugman() ? 2 : 0)),
+                SaveRevision = _saveRevision == 0 ? NextSaveRevision() : _saveRevision,
+                CurrentMapScene = (int)_trackedMapScene,
+            };
+
+            _saveRevision = pkt.SaveRevision;
+            Plugin.Net.SendSaveSlotSync(ref pkt);
         }
 
         public static void BroadcastSessionSnapshot(bool reliable)
@@ -636,6 +659,13 @@ namespace CupheadOnline.Sync
                 mapScene = _trackedMapScene;
 
             _localSaveProfile = BuildProfile(slotIndex, mapScene, isEmpty);
+        }
+
+        private static bool GetTrackedPlayer1IsMugman()
+        {
+            int clampedSlot = Mathf.Clamp(_trackedSaveSlot, 0, 2);
+            var data = PlayerData.GetDataForSlot(clampedSlot);
+            return data != null && data.isPlayer1Mugman;
         }
 
         private static SaveProfilePacket BuildProfile(byte slotIndex, Scenes mapScene, bool isEmpty)

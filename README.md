@@ -99,6 +99,8 @@ The mod then patches the game's menu and gameplay flow through Harmony and uses 
 
 Character choice follows Cuphead's native co-op model: the host chooses the lead character, and the guest becomes the opposite character. The base game does not expose a separate fully independent guest character picker.
 
+If the guest sees `REQUEST HOST SAVE` instead of `READY UP`, press it once to ask the host for a fresh save sync. The host also rebroadcasts the selected save automatically while waiting for guest ready.
+
 ## Building from source
 
 ### Build the mod only

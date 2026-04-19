@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.2.3 - 2026-04-19
+
+- Fixed a multiplayer lobby soft-block where the guest could stay stuck on `WAIT FOR SAVE` and never get a `READY UP` action after the host picked a save.
+- Added host-side save-selection rebroadcasts while waiting for guest ready, so missed or early save-sync packets are repaired automatically.
+- Changed the guest lobby action from a dead `WAIT FOR SAVE` row into `REQUEST HOST SAVE`, giving guests a manual resync button if the host selection has not arrived yet.
+
 ## v1.2.2 - 2026-04-19
 
 - Reworked the integrated multiplayer start flow so the host now chooses `SAVE SLOT`, `LEAD`, and `START GAME` directly from the lobby instead of bouncing through Cuphead's solo save menu.
