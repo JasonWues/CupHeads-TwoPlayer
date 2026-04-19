@@ -112,6 +112,9 @@ namespace CupheadOnline
 
             // Player lifecycle
             PatchSafe(harmony, typeof(PlayerManagerAwakePatch));
+            PatchSafe(harmony, typeof(PlayerManagerGetPlayerInputPatch));
+            PatchSafe(harmony, typeof(MapAwakePatch));
+            PatchSafe(harmony, typeof(MapCreatePlayersPatch));
             PatchSafe(harmony, typeof(PlayerLevelInitPatch));
             PatchSafe(harmony, typeof(StatsLevelInitPatch));
             PatchSafe(harmony, typeof(LevelStartPatch));
@@ -163,6 +166,8 @@ namespace CupheadOnline
 
             // Movement / input sync
             PatchSafe(harmony, typeof(PlayerMotorPatch));
+            PatchSafe(harmony, typeof(MapPlayerMotorPatch));
+            PatchSafe(harmony, typeof(MapPlayerAnimationPatch));
             PatchSafe(harmony, typeof(PlayerInputAxisPatch));
             PatchSafe(harmony, typeof(PlayerInputAxisIntPatch));
             PatchSafe(harmony, typeof(PlayerInputButtonPatch));
@@ -200,6 +205,7 @@ namespace CupheadOnline
         {
             MainThreadQueue.Drain();
             Net?.Poll();
+            MultiplayerSession.EnsureCupheadMultiplayerState();
             EnemySyncManager.HostTick();
             ExtraRemoteAvatarManager.Update();
             ExtraParticipantDamageBridge.Update();
@@ -266,6 +272,6 @@ namespace CupheadOnline
     {
         public const string GUID    = "com.cupheadonline.mod";
         public const string NAME    = "CupHeads";
-        public const string VERSION = "1.2.5";
+        public const string VERSION = "1.2.6";
     }
 }

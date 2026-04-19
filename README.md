@@ -17,6 +17,7 @@ Steam P2P multiplayer for Cuphead, plus a desktop installer that handles the mod
 - Host-led lobby flow with integrated `SAVE SLOT`, `LEAD`, and `START GAME` actions
 - Host-authoritative scene syncing for level and menu transitions
 - Automatic host scene-follow so guests are pulled into the selected save/map when the host starts
+- Networked overworld handoff that spawns both native players, remaps guest controls onto Player Two, and syncs map movement before entering a level
 - Save compatibility checks with warnings for mismatched progress, DLC state, or setup
 - Live connection HUD with role, status, session info, and sync warnings
 - In-game session panel with `F8` toggle for quick diagnostics and session state
@@ -103,6 +104,8 @@ Character choice follows Cuphead's native co-op model: the host chooses the lead
 If the guest sees `REQUEST HOST SAVE`, press it once to ask the host for a fresh save sync. The host also rebroadcasts the selected save automatically while the lobby is open.
 
 When the host starts, CupHeads sends an explicit launch scene and keeps watching host snapshots. If the guest falls behind or misses the first launch packet, the mod attempts to auto-follow the host scene instead of requiring a manual resync.
+
+During the Steam session, guests are mapped onto Cuphead's native Player Two slot. CupHeads remaps the guest's normal keyboard/controller input to that slot automatically, so the guest should move as Mugman on the map instead of loading as a frozen solo Cuphead.
 
 ## Building from source
 

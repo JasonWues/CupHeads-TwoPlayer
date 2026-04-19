@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.2.6 - 2026-04-19
+
+- Fixed Steam multiplayer launches landing both players in separate solo overworld sessions by forcing Cuphead's native two-player flag before map and level player spawning.
+- Added client input-slot remapping so Steam guests control the Player Two/Mugman slot with their normal keyboard or controller instead of being stuck on an unassigned local Player Two input.
+- Added overworld map player state sync so host and guest map avatars can see each other moving before entering a boss or level.
+
 ## v1.2.5 - 2026-04-19
 
 - Added an explicit host launch scene packet when `START GAME` is pressed so guests are pulled into the selected save/map immediately.

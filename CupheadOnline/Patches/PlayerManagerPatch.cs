@@ -16,8 +16,40 @@ namespace CupheadOnline.Patches
     {
         static void Postfix()
         {
-            if (MultiplayerSession.IsActive)
-                PlayerManager.Multiplayer = true;
+            MultiplayerSession.EnsureCupheadMultiplayerState();
+        }
+    }
+
+    [HarmonyPatch(typeof(PlayerManager), "GetPlayerInput")]
+    public static class PlayerManagerGetPlayerInputPatch
+    {
+        static void Prefix(ref PlayerId id)
+        {
+            if (!MultiplayerSession.IsActive || !MultiplayerSession.IsClient)
+                return;
+
+            if (id == PlayerId.PlayerTwo)
+                id = PlayerId.PlayerOne;
+            else if (id == PlayerId.PlayerOne)
+                id = PlayerId.PlayerTwo;
+        }
+    }
+
+    [HarmonyPatch(typeof(Map), "Awake")]
+    public static class MapAwakePatch
+    {
+        static void Prefix()
+        {
+            MultiplayerSession.EnsureCupheadMultiplayerState();
+        }
+    }
+
+    [HarmonyPatch(typeof(Map), "CreatePlayers")]
+    public static class MapCreatePlayersPatch
+    {
+        static void Prefix()
+        {
+            MultiplayerSession.EnsureCupheadMultiplayerState();
         }
     }
 
@@ -53,8 +85,7 @@ namespace CupheadOnline.Patches
     {
         static void Prefix()
         {
-            if (MultiplayerSession.IsActive)
-                PlayerManager.Multiplayer = true;
+            MultiplayerSession.EnsureCupheadMultiplayerState();
         }
     }
 }

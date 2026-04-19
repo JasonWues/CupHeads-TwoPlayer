@@ -65,6 +65,7 @@ namespace CupheadOnline
             IsHost   = true;
             Tick     = 0;
             RebuildParticipants();
+            EnsureCupheadMultiplayerState();
             Plugin.Log.LogInfo("[Session] Started as HOST");
             OnSessionStarted?.Invoke();
         }
@@ -75,6 +76,7 @@ namespace CupheadOnline
             IsHost   = false;
             Tick     = 0;
             RebuildParticipants();
+            EnsureCupheadMultiplayerState();
             Plugin.Log.LogInfo("[Session] Started as CLIENT");
             OnSessionStarted?.Invoke();
         }
@@ -105,6 +107,25 @@ namespace CupheadOnline
 
         public static bool IsAuthoritativePlayer(PlayerId id) => IsLocalPlayer(id);
         public static bool IsTrackedParticipant(byte participantId) => IsActive && _participantLocality.ContainsKey(participantId);
+
+        public static void EnsureCupheadMultiplayerState()
+        {
+            if (!IsActive)
+                return;
+
+            try
+            {
+                PlayerManager.Multiplayer = true;
+                PlayerManager.SetPlayerCanJoin(PlayerId.PlayerTwo, false, false);
+                PlayerManager.SetPlayerCanSwitch(PlayerId.PlayerOne, false);
+                PlayerManager.SetPlayerCanSwitch(PlayerId.PlayerTwo, false);
+            }
+            catch
+            {
+                // PlayerManager is not ready during very early boot. Scene patches
+                // and Plugin.Update call this again once the game objects exist.
+            }
+        }
 
         public static bool TryGetParticipantIsLocal(PlayerId id, out bool isLocal)
         {
