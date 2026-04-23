@@ -15,6 +15,8 @@ namespace CupheadOnline.Sync
             public InputFramePacket Current;
             public InputFramePacket Previous;
             public bool HasData;
+            public bool HasReceivedTick;
+            public uint LastReceivedTick;
             public int StallFrames;
         }
 
@@ -36,19 +38,30 @@ namespace CupheadOnline.Sync
         public static void Apply(byte participantId, InputFramePacket pkt)
         {
             var state = GetOrCreateState(participantId);
-            if (state.HasData && state.Current.Tick == pkt.Tick)
+
+            if (state.HasReceivedTick)
             {
-                state.Current = pkt;
-                state.StallFrames = 0;
-                return;
+                if (pkt.Tick == state.LastReceivedTick)
+                {
+                    state.Current = pkt;
+                    state.HasData = true;
+                    state.StallFrames = 0;
+                    return;
+                }
+
+                if (!NetTick.IsNewer(pkt.Tick, state.LastReceivedTick))
+                    return;
             }
 
             if (state.HasData)
                 state.Previous = state.Current;
-            else
+            else if (!state.HasReceivedTick)
                 state.Previous = default(InputFramePacket);
+
             state.Current = pkt;
             state.HasData = true;
+            state.HasReceivedTick = true;
+            state.LastReceivedTick = pkt.Tick;
             state.StallFrames = 0;
         }
 

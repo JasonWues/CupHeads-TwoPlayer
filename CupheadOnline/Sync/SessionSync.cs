@@ -361,7 +361,10 @@ namespace CupheadOnline.Sync
                 return;
 
             if (_hasTrackedSave)
+            {
+                RebroadcastTrackedSaveSelection();
                 BroadcastSelectedSaveProfile();
+            }
 
             var start = new SessionStartPacket
             {

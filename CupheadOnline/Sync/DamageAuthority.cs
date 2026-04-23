@@ -20,6 +20,7 @@ namespace CupheadOnline.Sync
         // We compare damage amount + source to avoid spoofing.
         private static float  _pendingDamage;
         private static byte   _pendingSource;
+        private static PlayerId _pendingTarget = PlayerId.None;
         private static bool   _pendingReady;
 
         // ──────────────────────────────────────────────────────────────────────
@@ -37,6 +38,7 @@ namespace CupheadOnline.Sync
             // Mark as authorised so the prefix patch lets it through
             _pendingDamage = pkt.Damage;
             _pendingSource = pkt.Source;
+            _pendingTarget = (PlayerId)pkt.TargetPlayerId;
             _pendingReady  = true;
 
             // Build a synthetic DamageInfo and call TakeDamage
@@ -48,17 +50,31 @@ namespace CupheadOnline.Sync
             dr.TakeDamage(info);
 
             _pendingReady = false;
+            _pendingTarget = PlayerId.None;
         }
 
         /// <summary>
         /// Prefix guard called by DamageReceiverPatch.
         /// Returns true (allow) only for damage we triggered ourselves via ApplyAuthorized.
         /// </summary>
-        public static bool IsAuthorised(DamageDealer.DamageInfo info)
+        public static bool IsAuthorised(PlayerDamageReceiver receiver, DamageDealer.DamageInfo info)
         {
             if (!_pendingReady) return false;
+
+            var player = receiver != null ? receiver.GetComponent<AbstractPlayerController>() : null;
+            if (player == null || player.id != _pendingTarget)
+                return false;
+
             return System.Math.Abs(info.damage - _pendingDamage) < 0.001f
                 && info.damageSource == (DamageDealer.DamageSource)_pendingSource;
+        }
+
+        public static void Reset()
+        {
+            _pendingDamage = 0f;
+            _pendingSource = 0;
+            _pendingTarget = PlayerId.None;
+            _pendingReady = false;
         }
     }
 }

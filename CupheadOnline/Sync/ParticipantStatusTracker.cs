@@ -37,6 +37,13 @@ namespace CupheadOnline.Sync
 
         public static void Apply(PlayerStatusPacket pkt)
         {
+            ParticipantStatus existing;
+            if (_statuses.TryGetValue(pkt.ParticipantId, out existing)
+             && NetTick.IsOlder(pkt.Tick, existing.Tick))
+            {
+                return;
+            }
+
             _statuses[pkt.ParticipantId] = new ParticipantStatus
             {
                 ParticipantId = pkt.ParticipantId,

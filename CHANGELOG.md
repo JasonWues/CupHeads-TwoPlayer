@@ -1,5 +1,26 @@
 # Changelog
 
+## v1.2.11 - 2026-04-23
+
+- Registered the deterministic `Rand.GetValue` Harmony patches in the live patch pass so seeded scene RNG now actually drives boss patterns, enemy spawns, and other random gameplay the same way on both peers.
+- Added a startup Harmony coverage audit that warns if a new patch class exists in the codebase but was never wired into `Plugin.Awake()`, reducing the chance of silent future desync regressions.
+- Rejected stale remote input, player-state, enemy-state, extra-participant, and status packets so older combat snapshots cannot rewind newer gameplay during boss fights or after jitter.
+- Fixed the remote input stall-resume path so held buttons do not come back as phantom fresh presses after a brief packet drought.
+- Expanded proxy motor state application for remote gameplay slots so dash, duck, hit, grounded, and super-state flags stay closer to the host during active combat.
+- Switched enemy HP reflection from a single global cache to a per-enemy-type cache, which prevents one boss or enemy class from poisoning HP sync for every other class loaded later in the run.
+
+## v1.2.10 - 2026-04-19
+
+- Moved remote loadout application back into the remote player init path so boss-fight weapon managers build from the synced loadout instead of being hot-swapped mid-run.
+- Stopped replaying lobby loadout packets into active gameplay every few frames, which removes the repeated loadout spam and the weapon-prefab `KeyNotFoundException` death crash path.
+- Let the host run the guest through Cuphead's real map and level motor/controller path using remote inputs, while keeping the client-side host slot as a proxy, for more reliable movement, jump, collision, and interaction behavior.
+- Removed built-in remote death toggling from raw snapshot packets so damage/status authority stops fighting the real death and revive systems.
+- Added PlayerInput button-down and button-up interception for network-controlled slots so jump, confirm, cancel, and other edge-triggered actions stay responsive for the hosted guest.
+- Reset transient participant, revive, color, avatar, and damage-authorization state on scene transitions so stale session data does not bleed across maps, menus, or level loads.
+- Re-broadcast the selected save slot as part of host recovery bundles, so reconnect and repair flows refresh both the save profile and the actual tracked slot selection.
+- Tightened client damage authorization to the intended player receiver, reducing the chance of cross-player damage tokens leaking into the wrong slot.
+- Pushed authoritative player status immediately on death and revive so health/death state reaches peers without waiting for slower follow-up updates.
+
 ## v1.2.9 - 2026-04-19
 
 - Reworked live input replication so both host and guest continuously mirror gameplay and menu inputs through a single packet stream instead of conflicting map, level, and UI send paths.

@@ -84,6 +84,9 @@ namespace CupheadOnline.Patches
             }
 
             RemoteInputDriver.Tick(player.id);
+            if (MultiplayerSession.IsHost && player.id <= PlayerId.PlayerTwo)
+                return true;
+
             ApplyRemoteMapState(__instance, (byte)player.id);
             return false;
         }
@@ -94,7 +97,11 @@ namespace CupheadOnline.Patches
                 return;
 
             var player = __instance != null ? __instance.player : null;
-            if (player == null || !MultiplayerSession.IsLocalPlayer(player.id))
+            if (player == null)
+                return;
+
+            bool authoritativeBuiltIn = MultiplayerSession.IsHost && player.id <= PlayerId.PlayerTwo;
+            if (!authoritativeBuiltIn && !MultiplayerSession.IsLocalPlayer(player.id))
                 return;
 
             var packet = BuildMapStatePacket(player, __instance);

@@ -25,7 +25,7 @@ namespace CupheadOnline.Patches
             if (MultiplayerSession.IsClient)
             {
                 // Accept only damage that arrived via an authorised DamageEventPacket
-                return DamageAuthority.IsAuthorised(info);
+                return DamageAuthority.IsAuthorised(__instance, info);
             }
             return true; // host: process normally
         }

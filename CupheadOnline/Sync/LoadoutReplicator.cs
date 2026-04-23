@@ -18,6 +18,7 @@ namespace CupheadOnline.Sync
     {
         private static LobbySyncPacket? _pending;
         private static LobbySyncPacket? _lastSent;
+        private static LobbySyncPacket? _lastReceived;
         private static float _nextBroadcastAt;
 
         static LoadoutReplicator()
@@ -30,20 +31,26 @@ namespace CupheadOnline.Sync
         {
             _pending = pkt;
             ApplyToPlayerData((PlayerId)pkt.PlayerId, pkt);
-            ApplyToLivePlayer((PlayerId)pkt.PlayerId, pkt);
-            Plugin.Log.LogInfo(
-                $"[Loadout] Received remote loadout for Player {pkt.PlayerId}: " +
-                $"W1={pkt.Weapon1} W2={pkt.Weapon2} Super={pkt.Super} Charm={pkt.Charm} Chalice={pkt.IsChalice}");
+            if (ShouldApplyLiveNow())
+                ApplyToLivePlayer((PlayerId)pkt.PlayerId, pkt);
+
+            if (!_lastReceived.HasValue || !PacketsEqual(_lastReceived.Value, pkt))
+            {
+                Plugin.Log.LogInfo(
+                    $"[Loadout] Received remote loadout for Player {pkt.PlayerId}: " +
+                    $"W1={pkt.Weapon1} W2={pkt.Weapon2} Super={pkt.Super} Charm={pkt.Charm} Chalice={pkt.IsChalice}");
+                _lastReceived = pkt;
+            }
         }
 
-        public static void ApplyPending(PlayerId id)
+        public static void ApplyPending(PlayerStatsManager stats, PlayerId id)
         {
             if (!_pending.HasValue) return;
             var pkt = _pending.Value;
             if (pkt.PlayerId != (byte)id) return;
 
             ApplyToPlayerData(id, pkt);
-            ApplyToLivePlayer(id, pkt);
+            ApplyToStats(stats, pkt);
             _pending = null;
         }
 
@@ -54,6 +61,8 @@ namespace CupheadOnline.Sync
         public static void Update()
         {
             if (!MultiplayerSession.IsActive || Plugin.Net == null || !Plugin.Net.IsConnected)
+                return;
+            if (!ShouldBroadcastNow())
                 return;
 
             LobbySyncPacket pkt;
@@ -72,6 +81,8 @@ namespace CupheadOnline.Sync
         public static void BroadcastLocalLoadout()
         {
             if (!MultiplayerSession.IsActive || Plugin.Net == null || !Plugin.Net.IsConnected)
+                return;
+            if (!ShouldBroadcastNow())
                 return;
 
             LobbySyncPacket pkt;
@@ -131,10 +142,14 @@ namespace CupheadOnline.Sync
         static void ApplyToLivePlayer(PlayerId id, LobbySyncPacket pkt)
         {
             var player = PlayerManager.GetPlayer(id);
-            if (player == null)
+            if (player == null || player.stats == null)
                 return;
 
-            var stats = player.stats;
+            ApplyToStats(player.stats, pkt);
+        }
+
+        static void ApplyToStats(PlayerStatsManager stats, LobbySyncPacket pkt)
+        {
             if (stats == null)
                 return;
 
@@ -147,6 +162,16 @@ namespace CupheadOnline.Sync
 
             try { stats.isChalice = pkt.IsChalice != 0; }
             catch { }
+        }
+
+        static bool ShouldBroadcastNow()
+        {
+            return Level.Current == null;
+        }
+
+        static bool ShouldApplyLiveNow()
+        {
+            return Level.Current == null;
         }
 
         static bool PacketsEqual(LobbySyncPacket left, LobbySyncPacket right)
@@ -163,6 +188,7 @@ namespace CupheadOnline.Sync
         {
             _pending = null;
             _lastSent = null;
+            _lastReceived = null;
             _nextBroadcastAt = 0f;
         }
     }

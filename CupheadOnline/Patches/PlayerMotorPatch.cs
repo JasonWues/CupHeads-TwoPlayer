@@ -6,29 +6,25 @@ using CupheadOnline.Sync;
 namespace CupheadOnline.Patches
 {
     /// <summary>
-    /// Patches LevelPlayerMotor.FixedUpdate — the heart of all movement physics.
+    /// Patches LevelPlayerMotor.FixedUpdate.
     ///
-    /// Strategy:
-    ///   LOCAL player  → let original run, then broadcast PlayerStatePacket.
-    ///   REMOTE player → skip original (Prefix returns false), apply interpolated
-    ///                   network position + set look direction for animation.
+    /// Host: both built-in gameplay slots run the real Cuphead motor so the host
+    /// remains authoritative for movement, collisions, jump state, death, and
+    /// animation transitions.
     ///
-    /// Why Prefix+Postfix rather than a single patch:
-    ///   The Prefix decides skip/run based on session state; the Postfix only
-    ///   executes when the original was NOT skipped (HarmonyLib contract).
-    ///   For the remote player we do everything in the Prefix.
+    /// Client: the host-controlled slot stays a proxy that consumes snapshots.
     /// </summary>
     [HarmonyPatch(typeof(LevelPlayerMotor), "FixedUpdate")]
     public static class PlayerMotorPatch
     {
-        // ── Prefix ────────────────────────────────────────────────────────────
-
         static bool Prefix(LevelPlayerMotor __instance)
         {
-            if (!MultiplayerSession.IsActive) return true; // singleplayer pass-through
+            if (!MultiplayerSession.IsActive)
+                return true;
 
             var player = __instance.player;
-            if (player == null) return true;
+            if (player == null)
+                return true;
 
             byte extraParticipantId;
             if (ExtraRemoteAvatarManager.TryGetAvatarParticipantId(__instance, out extraParticipantId))
@@ -40,50 +36,52 @@ namespace CupheadOnline.Patches
 
             if (MultiplayerSession.IsNetworkControlledPlayer(player.id))
             {
-                // ── REMOTE PLAYER: replace FixedUpdate entirely ───────────────
                 RemoteInputDriver.Tick(player.id);
+
+                // The host simulates the guest with the real gameplay motor.
+                if (MultiplayerSession.IsHost && player.id <= PlayerId.PlayerTwo)
+                    return true;
+
                 ApplyRemoteState(__instance, (byte)player.id);
-                return false; // skip original
+                return false;
             }
 
-            // ── LOCAL PLAYER: increment tick before original runs ─────────────
             MultiplayerSession.IncrementTick();
             return true;
         }
 
-        // ── Postfix (only runs when Prefix returned true — i.e. local player) ─
-
         static void Postfix(LevelPlayerMotor __instance)
         {
-            if (!MultiplayerSession.IsActive) return;
-            if (Plugin.Net == null || !Plugin.Net.IsConnected) return;
+            if (!MultiplayerSession.IsActive)
+                return;
+            if (Plugin.Net == null || !Plugin.Net.IsConnected)
+                return;
 
             var player = __instance.player;
-            if (player == null) return;
-            if (!MultiplayerSession.IsLocalPlayer(player.id)) return;
+            if (player == null)
+                return;
 
-            // Build and send state packet
+            bool authoritativeBuiltIn = MultiplayerSession.IsHost && player.id <= PlayerId.PlayerTwo;
+            if (!authoritativeBuiltIn && !MultiplayerSession.IsLocalPlayer(player.id))
+                return;
+
             var pkt = BuildStatePacket(player, __instance);
 
-            if (MultiplayerSession.IsHost)
+            if (authoritativeBuiltIn)
                 Plugin.Net.SendPlayerState(ref pkt);
             else
                 SendInputFrameAndState(__instance, player, ref pkt);
         }
 
-        // ─────────────────────────────────────────────────────────────────────
-        //  Helpers
-        // ─────────────────────────────────────────────────────────────────────
-
         internal static byte BuildFlags(AbstractPlayerController player, LevelPlayerMotor m)
         {
             byte f = 0;
-            if (m.Grounded)          f |= 1;
-            if (m.Dashing)           f |= 2;
-            if (m.Ducking)           f |= 4;
-            if (m.GravityReversed)   f |= 8;
-            if (m.IsHit)             f |= 16;
-            if (m.IsUsingSuperOrEx)  f |= 32;
+            if (m.Grounded) f |= 1;
+            if (m.Dashing) f |= 2;
+            if (m.Ducking) f |= 4;
+            if (m.GravityReversed) f |= 8;
+            if (m.IsHit) f |= 16;
+            if (m.IsUsingSuperOrEx) f |= 32;
             if (player != null && player.IsDead) f |= 64;
             return f;
         }
@@ -106,45 +104,34 @@ namespace CupheadOnline.Patches
         internal static byte GetAnimHash(LevelPlayerController player)
         {
             var anim = player.animationController?.animator;
-            if (anim == null) return 0;
+            if (anim == null)
+                return 0;
+
             return (byte)(anim.GetCurrentAnimatorStateInfo(0).fullPathHash & 0xFF);
         }
 
-        /// <summary>
-        /// PlayerState is still replicated from gameplay here. InputFrames now
-        /// come from the global per-frame pump so menus and gameplay share one
-        /// consistent input stream.
-        /// </summary>
-        static void SendInputFrameAndState(LevelPlayerMotor motor, LevelPlayerController player,
-                                           ref PlayerStatePacket statePkt)
+        static void SendInputFrameAndState(LevelPlayerMotor motor, LevelPlayerController player, ref PlayerStatePacket statePkt)
         {
             Plugin.Net.SendPlayerState(ref statePkt);
         }
 
-        /// <summary>
-        /// Called instead of FixedUpdate for the remote player.
-        /// Applies interpolated position and syncs motor properties used by the animator.
-        /// </summary>
         static void ApplyRemoteState(LevelPlayerMotor motor, byte participantId)
         {
             var snapshot = RemotePlayer.GetNextSnapshot(participantId);
-            if (!snapshot.HasValue) return;
+            if (!snapshot.HasValue)
+                return;
 
             var s = snapshot.Value;
-
-            // ── Position ──────────────────────────────────────────────────────
             var target = new Vector3(s.PosX, s.PosY, motor.transform.position.z);
-            // Smooth snap: lerp 80 % toward target per frame to hide jitter
             motor.transform.position = Vector3.Lerp(
                 motor.transform.position,
                 target,
                 Mathf.Min(1f, 20f * Time.fixedDeltaTime));
 
-            // ── Motor properties (drive animation without physics) ────────────
-            // Property setters may be non-public in the compiled binary; use Traverse
-            var t = HarmonyLib.Traverse.Create(motor);
+            var t = Traverse.Create(motor);
             t.Property("LookDirection").SetValue(new Trilean2(s.LookX, s.LookY));
             t.Property("TrueLookDirection").SetValue(new Trilean2(s.LookX, s.LookY));
+
             InputFramePacket input;
             if (RemoteInputDriver.TryGetCurrent(participantId, out input))
             {
@@ -152,27 +139,32 @@ namespace CupheadOnline.Patches
                     input.AxisX > 0.38f ? 1 : input.AxisX < -0.38f ? -1 : 0,
                     input.AxisY > 0.38f ? 1 : input.AxisY < -0.38f ? -1 : 0));
             }
+            else
+            {
+                t.Property("MoveDirection").SetValue(new Trilean2(0, 0));
+            }
+
             t.Property("Grounded").SetValue(s.Grounded);
+            t.Property("Dashing").SetValue(s.Dashing);
+            t.Property("Ducking").SetValue(s.Ducking);
             t.Property("Locked").SetValue(false);
             t.Property("GravityReversed").SetValue(s.GravReversed);
+            t.Property("IsHit").SetValue(s.IsHit);
+            t.Property("IsUsingSuperOrEx").SetValue(s.IsSuper);
 
-            // Track state transitions to fire animation events
             RemotePlayer.UpdateStateTransitions(participantId, motor, s);
         }
     }
-
-    // ──────────────────────────────────────────────────────────────────────────
-    //  PlayerInput patches — intercept axis/button reads for the remote player
-    //  so the motor feeds from received network data instead of controller.
-    // ──────────────────────────────────────────────────────────────────────────
 
     [HarmonyPatch(typeof(PlayerInput), nameof(PlayerInput.GetAxis))]
     public static class PlayerInputAxisPatch
     {
         static bool Prefix(PlayerInput __instance, PlayerInput.Axis axis, ref float __result)
         {
-            if (!MultiplayerSession.IsActive) return true;
-            if (!MultiplayerSession.IsNetworkControlledPlayer(__instance.playerId)) return true;
+            if (!MultiplayerSession.IsActive)
+                return true;
+            if (!MultiplayerSession.IsNetworkControlledPlayer(__instance.playerId))
+                return true;
 
             InputFramePacket input;
             if (!RemoteInputDriver.TryGetCurrent(__instance.playerId, out input))
@@ -191,8 +183,10 @@ namespace CupheadOnline.Patches
     {
         static bool Prefix(PlayerInput __instance, PlayerInput.Axis axis, ref int __result)
         {
-            if (!MultiplayerSession.IsActive) return true;
-            if (!MultiplayerSession.IsNetworkControlledPlayer(__instance.playerId)) return true;
+            if (!MultiplayerSession.IsActive)
+                return true;
+            if (!MultiplayerSession.IsNetworkControlledPlayer(__instance.playerId))
+                return true;
 
             InputFramePacket input;
             if (!RemoteInputDriver.TryGetCurrent(__instance.playerId, out input))
@@ -212,8 +206,10 @@ namespace CupheadOnline.Patches
     {
         static bool Prefix(PlayerInput __instance, CupheadButton button, ref bool __result)
         {
-            if (!MultiplayerSession.IsActive) return true;
-            if (!MultiplayerSession.IsNetworkControlledPlayer(__instance.playerId)) return true;
+            if (!MultiplayerSession.IsActive)
+                return true;
+            if (!MultiplayerSession.IsNetworkControlledPlayer(__instance.playerId))
+                return true;
 
             InputFramePacket input;
             if (!RemoteInputDriver.TryGetCurrent(__instance.playerId, out input))
@@ -223,6 +219,36 @@ namespace CupheadOnline.Patches
             }
 
             __result = input.IsPressed(button);
+            return false;
+        }
+    }
+
+    [HarmonyPatch(typeof(PlayerInput), "GetButtonDown")]
+    public static class PlayerInputButtonDownPatch
+    {
+        static bool Prefix(PlayerInput __instance, CupheadButton button, ref bool __result)
+        {
+            if (!MultiplayerSession.IsActive)
+                return true;
+            if (!MultiplayerSession.IsNetworkControlledPlayer(__instance.playerId))
+                return true;
+
+            __result = RemoteInputDriver.WasPressedThisFrame((byte)__instance.playerId, button);
+            return false;
+        }
+    }
+
+    [HarmonyPatch(typeof(PlayerInput), "GetButtonUp")]
+    public static class PlayerInputButtonUpPatch
+    {
+        static bool Prefix(PlayerInput __instance, CupheadButton button, ref bool __result)
+        {
+            if (!MultiplayerSession.IsActive)
+                return true;
+            if (!MultiplayerSession.IsNetworkControlledPlayer(__instance.playerId))
+                return true;
+
+            __result = RemoteInputDriver.WasReleasedThisFrame((byte)__instance.playerId, button);
             return false;
         }
     }

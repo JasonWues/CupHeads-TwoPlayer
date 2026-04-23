@@ -25,11 +25,15 @@ namespace CupheadOnline.Sync
             public readonly Queue<PlayerStatePacket> Buffer = new Queue<PlayerStatePacket>(MaxBuffer);
             public PlayerStatePacket Last;
             public bool HasLast;
+            public bool HasReceivedTick;
+            public uint LastReceivedTick;
             public byte PrevFlags;
         }
 
         static readonly Dictionary<byte, RemotePlayerSlotState> _slotStates =
             new Dictionary<byte, RemotePlayerSlotState>(4);
+        static readonly HashSet<string> _failedEvents =
+            new HashSet<string>();
 
         // Reflection cache for raising VB.NET event backing delegates on LevelPlayerMotor.
         // VB compiles `Public Event Foo As Action` to a private field named `FooEvent`.
@@ -54,6 +58,11 @@ namespace CupheadOnline.Sync
             if (pkt.PlayerId > (byte)PlayerId.PlayerTwo)
             {
                 var extraState = GetOrCreateState(pkt.PlayerId);
+                if (extraState.HasReceivedTick && !NetTick.IsNewer(pkt.Tick, extraState.LastReceivedTick))
+                    return;
+
+                extraState.HasReceivedTick = true;
+                extraState.LastReceivedTick = pkt.Tick;
                 if (extraState.Buffer.Count >= MaxBuffer)
                     extraState.Buffer.Dequeue();
 
@@ -64,11 +73,15 @@ namespace CupheadOnline.Sync
             }
 
             var playerId = (PlayerId)pkt.PlayerId;
-            ApplyBuiltInLifeState(playerId, pkt.IsDead);
             if (!MultiplayerSession.IsNetworkControlledPlayer(playerId))
                 return;
 
             var state = GetOrCreateState(playerId);
+            if (state.HasReceivedTick && !NetTick.IsNewer(pkt.Tick, state.LastReceivedTick))
+                return;
+
+            state.HasReceivedTick = true;
+            state.LastReceivedTick = pkt.Tick;
             if (state.Buffer.Count >= MaxBuffer)
                 state.Buffer.Dequeue();
 
@@ -134,6 +147,7 @@ namespace CupheadOnline.Sync
         public static void Reset()
         {
             _slotStates.Clear();
+            _failedEvents.Clear();
         }
 
         public static void Reset(PlayerId playerId)
@@ -165,6 +179,7 @@ namespace CupheadOnline.Sync
         static void RaiseEvent(LevelPlayerMotor motor, FieldInfo fi)
         {
             if (fi == null) return;
+            if (_failedEvents.Contains(fi.Name)) return;
 
             try
             {
@@ -175,19 +190,8 @@ namespace CupheadOnline.Sync
             catch (Exception ex)
             {
                 Plugin.Log.LogWarning("[RemotePlayer] Event raise failed: " + ex.Message);
+                _failedEvents.Add(fi.Name);
             }
-        }
-
-        static void ApplyBuiltInLifeState(PlayerId playerId, bool isDead)
-        {
-            var player = PlayerManager.GetPlayer(playerId);
-            if (player == null || player.gameObject == null)
-                return;
-
-            if (player.gameObject.activeSelf == !isDead)
-                return;
-
-            player.gameObject.SetActive(!isDead);
         }
     }
 }

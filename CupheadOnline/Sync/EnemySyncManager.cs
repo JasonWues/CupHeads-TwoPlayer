@@ -23,10 +23,13 @@ namespace CupheadOnline.Sync
         private const  int   BROADCAST_EVERY = 3; // frames (= 20 Hz at 60 Hz FixedUpdate)
         private static int   _recoveryBurstFrames;
 
-        // Reflection cache for enemy HP field
-        private static FieldInfo _hpField;
-        private static bool      _hpFieldSearched;
+        // Reflection cache for enemy HP field, keyed per runtime enemy type.
+        private static readonly Dictionary<System.Type, FieldInfo> _hpFields =
+            new Dictionary<System.Type, FieldInfo>(64);
+        private static readonly HashSet<System.Type> _missingHpFieldTypes =
+            new HashSet<System.Type>();
         private static readonly Dictionary<int, EnemySnapshotState> _lastSent = new Dictionary<int, EnemySnapshotState>();
+        private static readonly Dictionary<int, uint> _lastReceivedTicks = new Dictionary<int, uint>(128);
 
         private struct EnemySnapshotState
         {
@@ -104,6 +107,15 @@ namespace CupheadOnline.Sync
                 if (!EnemyRegistry.TryGet(pkt.InstanceId, out dr)) return;
             }
 
+            uint lastReceivedTick;
+            if (_lastReceivedTicks.TryGetValue(pkt.InstanceId, out lastReceivedTick)
+             && !NetTick.IsNewer(pkt.Tick, lastReceivedTick))
+            {
+                return;
+            }
+
+            _lastReceivedTicks[pkt.InstanceId] = pkt.Tick;
+
             var go = dr.gameObject;
 
             // ── Position: gentle lerp to avoid visual snap ────────────────────
@@ -133,6 +145,7 @@ namespace CupheadOnline.Sync
             _broadcastCounter = 0;
             _recoveryBurstFrames = 0;
             _lastSent.Clear();
+            _lastReceivedTicks.Clear();
         }
 
         public static void TriggerRecoveryBurst(int frames = 150)
@@ -163,21 +176,27 @@ namespace CupheadOnline.Sync
 
         static FieldInfo FindHpField(DamageReceiver dr)
         {
-            if (_hpFieldSearched) return _hpField;
-            _hpFieldSearched = true;
+            if (dr == null)
+                return null;
 
             var t = dr.GetType();
+            FieldInfo fi;
+            if (_hpFields.TryGetValue(t, out fi))
+                return fi;
+
             const BindingFlags bf = BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public;
             foreach (var name in new[] { "hp", "HP", "health", "_hp", "currentHp", "currentHealth" })
             {
-                var fi = t.GetField(name, bf);
+                fi = t.GetField(name, bf);
                 if (fi != null && fi.FieldType == typeof(float))
                 {
-                    _hpField = fi;
+                    _hpFields[t] = fi;
                     return fi;
                 }
             }
-            Plugin.Log.LogWarning("[EnemySync] Could not find HP field on DamageReceiver — HP sync disabled.");
+            _hpFields[t] = null;
+            if (_missingHpFieldTypes.Add(t))
+                Plugin.Log.LogWarning("[EnemySync] Could not find HP field on " + t.Name + " - HP sync disabled for that enemy type.");
             return null;
         }
 

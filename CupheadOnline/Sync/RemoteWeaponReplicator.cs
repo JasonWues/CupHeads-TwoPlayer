@@ -24,6 +24,12 @@ namespace CupheadOnline.Sync
                 return;
             }
 
+            if (MultiplayerSession.IsHost
+             && MultiplayerSession.IsNetworkControlledPlayer((PlayerId)pkt.PlayerId))
+            {
+                return;
+            }
+
             var player = PlayerManager.GetPlayer((PlayerId)pkt.PlayerId) as LevelPlayerController;
             if (player == null) return;
 

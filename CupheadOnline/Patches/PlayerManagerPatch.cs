@@ -85,13 +85,13 @@ namespace CupheadOnline.Patches
     [HarmonyPatch(typeof(PlayerStatsManager), "LevelInit")]
     public static class StatsLevelInitPatch
     {
-        static void Postfix(PlayerStatsManager __instance)
+        static void Prefix(PlayerStatsManager __instance)
         {
             if (!MultiplayerSession.IsActive) return;
             var player = __instance.GetComponent<AbstractPlayerController>();
             if (player == null) return;
             if (MultiplayerSession.IsNetworkControlledPlayer(player.id))
-                LoadoutReplicator.ApplyPending(player.id);
+                LoadoutReplicator.ApplyPending(__instance, player.id);
         }
     }
 

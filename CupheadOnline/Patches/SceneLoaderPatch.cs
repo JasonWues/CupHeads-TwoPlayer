@@ -15,10 +15,16 @@ namespace CupheadOnline.Patches
         internal static void ResetTransientSyncState()
         {
             EnemySyncManager.Reset();
+            DamageAuthority.Reset();
             EnemyRegistry.Clear();
             RemotePlayer.Reset();
             RemoteInputDriver.Reset();
             ExtraParticipantTracker.Reset();
+            ExtraRemoteAvatarManager.Reset();
+            ExtraParticipantDamageBridge.Reset();
+            ExtraParticipantReviveVisuals.Reset();
+            ParticipantStatusTracker.Reset();
+            PlayerColorSync.Reset();
         }
 
         internal static void AllowNextClientSceneLoad()

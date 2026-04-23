@@ -105,7 +105,16 @@ namespace CupheadOnline
         public static bool IsNetworkControlledPlayer(PlayerId id) => IsRemotePlayer(id);
         public static bool IsNetworkControlledParticipant(byte participantId) => IsParticipant(participantId, false);
 
-        public static bool IsAuthoritativePlayer(PlayerId id) => IsLocalPlayer(id);
+        public static bool IsAuthoritativePlayer(PlayerId id)
+        {
+            if (!IsActive || id == PlayerId.None)
+                return false;
+
+            if (IsHost && id <= PlayerId.PlayerTwo)
+                return true;
+
+            return IsLocalPlayer(id);
+        }
         public static bool IsTrackedParticipant(byte participantId) => IsActive && _participantLocality.ContainsKey(participantId);
 
         public static void EnsureCupheadMultiplayerState()

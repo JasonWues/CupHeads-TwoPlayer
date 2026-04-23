@@ -1074,13 +1074,6 @@ namespace CupheadOnline.Net
             var incoming = new PlayerStatePacket();
             incoming.Read(reader);
 
-            if (sender == _peerId)
-            {
-                var hostProxyState = incoming;
-                hostProxyState.PlayerId = (byte)PlayerId.PlayerTwo;
-                RemotePlayer.OnStateReceived(hostProxyState);
-            }
-
             byte sessionParticipantId = GetOrAssignSessionParticipantId(sender);
             if (sessionParticipantId == INVALID_PARTICIPANT_ID)
                 return;

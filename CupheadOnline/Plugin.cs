@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 using BepInEx;
 using BepInEx.Configuration;
@@ -105,92 +106,109 @@ namespace CupheadOnline
 
             // ── Apply patches one-by-one so a single failure does not block all ─
             var harmony = new Harmony(PluginInfo.GUID);
+            var registeredPatchTypes = new HashSet<Type>();
 
             // Core UI — SlotSelect patches inject the native MULTIPLAYER menu item
-            PatchSafe(harmony, typeof(SlotSelectAwakePatch));
-            PatchSafe(harmony, typeof(SlotSelectUpdatePatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(SlotSelectAwakePatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(SlotSelectUpdatePatch));
 
             // Player lifecycle
-            PatchSafe(harmony, typeof(PlayerManagerAwakePatch));
-            PatchSafe(harmony, typeof(PlayerInputInitPatch));
-            PatchSafe(harmony, typeof(MapAwakePatch));
-            PatchSafe(harmony, typeof(MapCreatePlayersPatch));
-            PatchSafe(harmony, typeof(PlayerLevelInitPatch));
-            PatchSafe(harmony, typeof(StatsLevelInitPatch));
-            PatchSafe(harmony, typeof(LevelStartPatch));
-            PatchSafe(harmony, typeof(PlayerDeathStatePatch));
-            PatchSafe(harmony, typeof(PlayerReviveStatePatch));
-            PatchSafe(harmony, typeof(PlayerStatsInitialStatusPatch));
-            PatchSafe(harmony, typeof(PlayerStatsHealthChangedPatch));
-            PatchSafe(harmony, typeof(PlayerDeathEffectReviveOutOfFramePatch));
-            PatchSafe(harmony, typeof(PlayerDeathEffectExtraVisualStartPatch));
-            PatchSafe(harmony, typeof(PlayerDeathEffectExtraVisualParryPatch));
-            PatchSafe(harmony, typeof(PlayerDeathEffectExtraVisualParryAnimPatch));
-            PatchSafe(harmony, typeof(ExtraRemoteAvatarAwakePatch));
-            PatchSafe(harmony, typeof(PlayerManagerCenterPatch));
-            PatchSafe(harmony, typeof(PlayerManagerCameraCenterPatch));
-            PatchSafe(harmony, typeof(PlayerManagerTopPlayerPositionPatch));
-            PatchSafe(harmony, typeof(PlayerManagerGetNextPatch));
-            PatchSafe(harmony, typeof(PlayerManagerGetRandomPatch));
-            PatchSafe(harmony, typeof(PlayerManagerGetFirstPatch));
-            PatchSafe(harmony, typeof(PlayerManagerCurrentPatch));
-            PatchSafe(harmony, typeof(PlayerManagerCountPatch));
-            PatchSafe(harmony, typeof(PlayerManagerGetAllPlayersPatch));
-            PatchSafe(harmony, typeof(PlayerManagerBothPlayersActivePatch));
-            PatchSafe(harmony, typeof(CupheadLevelCameraPathPatch));
-            PatchSafe(harmony, typeof(PlatformingLevelEnemySpawnerPatch));
-            PatchSafe(harmony, typeof(PlatformingLevelPitMoveTriggerPatch));
-            PatchSafe(harmony, typeof(ForestPlatformingLevelChomperSpawnerPatch));
-            PatchSafe(harmony, typeof(AbstractPlatformingLevelEnemyTriggerPatch));
-            PatchSafe(harmony, typeof(LevelPitExtraParticipantPatch));
-            PatchSafe(harmony, typeof(PlatformingLevelShootingEnemyRangePatch));
-            PatchSafe(harmony, typeof(PlatformingLevelShootingEnemyVolumesPatch));
-            PatchSafe(harmony, typeof(PlatformingLevelShootingEnemyShootPatch));
-            PatchSafe(harmony, typeof(MountainPlatformingLevelElevatorHandlerStartPatch));
-            PatchSafe(harmony, typeof(CircusPlatformingLevelTrampolineSleepPatch));
-            PatchSafe(harmony, typeof(MountainPlatformingLevelScaleStartPatch));
-            PatchSafe(harmony, typeof(SnowCultLevelPlatformExtraBouncePatch));
-            PatchSafe(harmony, typeof(PlatformingLevelExitExtraParticipantPatch));
-            PatchSafe(harmony, typeof(LevelCoinExtraCollectorPatch));
-            PatchSafe(harmony, typeof(PirateLevelBarrelExtraTriggerPatch));
-            PatchSafe(harmony, typeof(AbstractLevelInteractiveEntityExtraPatch));
-            PatchSafe(harmony, typeof(HouseLevelExitExtraPatch));
-            PatchSafe(harmony, typeof(RobotLevelRobotHeadPrimaryPatch));
-            PatchSafe(harmony, typeof(ChessKnightLevelInitPatch3P));
-            PatchSafe(harmony, typeof(ChessKnightCheckTauntPatch3P));
-            PatchSafe(harmony, typeof(ChessKnightShouldBackDashPatch3P));
-            PatchSafe(harmony, typeof(ChessBishopFixedUpdatePatch3P));
-            PatchSafe(harmony, typeof(ChessBishopFindVerticalAnglePatch3P));
-            PatchSafe(harmony, typeof(ChessBishopFindHorizontalPositionPatch3P));
-            PatchSafe(harmony, typeof(SallyMeteorParryPatch3P));
+            PatchTracked(harmony, registeredPatchTypes, typeof(PlayerManagerAwakePatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(PlayerInputInitPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(MapAwakePatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(MapCreatePlayersPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(PlayerLevelInitPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(StatsLevelInitPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(LevelStartPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(PlayerDeathStatePatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(PlayerReviveStatePatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(PlayerStatsInitialStatusPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(PlayerStatsHealthChangedPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(PlayerDeathEffectReviveOutOfFramePatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(PlayerDeathEffectExtraVisualStartPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(PlayerDeathEffectExtraVisualParryPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(PlayerDeathEffectExtraVisualParryAnimPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(ExtraRemoteAvatarAwakePatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(PlayerManagerCenterPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(PlayerManagerCameraCenterPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(PlayerManagerTopPlayerPositionPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(PlayerManagerGetNextPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(PlayerManagerGetRandomPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(PlayerManagerGetFirstPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(PlayerManagerCurrentPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(PlayerManagerCountPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(PlayerManagerGetAllPlayersPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(PlayerManagerBothPlayersActivePatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(CupheadLevelCameraPathPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(PlatformingLevelEnemySpawnerPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(PlatformingLevelPitMoveTriggerPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(ForestPlatformingLevelChomperSpawnerPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(AbstractPlatformingLevelEnemyTriggerPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(LevelPitExtraParticipantPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(PlatformingLevelShootingEnemyRangePatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(PlatformingLevelShootingEnemyVolumesPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(PlatformingLevelShootingEnemyShootPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(MountainPlatformingLevelElevatorHandlerStartPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(CircusPlatformingLevelTrampolineSleepPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(MountainPlatformingLevelScaleStartPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(SnowCultLevelPlatformExtraBouncePatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(PlatformingLevelExitExtraParticipantPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(LevelCoinExtraCollectorPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(PirateLevelBarrelExtraTriggerPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(AbstractLevelInteractiveEntityExtraPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(HouseLevelExitExtraPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(RobotLevelRobotHeadPrimaryPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(ChessKnightLevelInitPatch3P));
+            PatchTracked(harmony, registeredPatchTypes, typeof(ChessKnightCheckTauntPatch3P));
+            PatchTracked(harmony, registeredPatchTypes, typeof(ChessKnightShouldBackDashPatch3P));
+            PatchTracked(harmony, registeredPatchTypes, typeof(ChessBishopFixedUpdatePatch3P));
+            PatchTracked(harmony, registeredPatchTypes, typeof(ChessBishopFindVerticalAnglePatch3P));
+            PatchTracked(harmony, registeredPatchTypes, typeof(ChessBishopFindHorizontalPositionPatch3P));
+            PatchTracked(harmony, registeredPatchTypes, typeof(SallyMeteorParryPatch3P));
 
             // Movement / input sync
-            PatchSafe(harmony, typeof(PlayerMotorPatch));
-            PatchSafe(harmony, typeof(MapPlayerMotorPatch));
-            PatchSafe(harmony, typeof(MapPlayerAnimationPatch));
-            PatchSafe(harmony, typeof(RewiredPlayerGetAxisPatch));
-            PatchSafe(harmony, typeof(RewiredPlayerGetButtonPatch));
-            PatchSafe(harmony, typeof(RewiredPlayerGetButtonDownPatch));
-            PatchSafe(harmony, typeof(RewiredPlayerGetButtonUpPatch));
-            PatchSafe(harmony, typeof(CupheadInputDisplayForButtonPatch));
-            PatchSafe(harmony, typeof(PlayerInputAxisPatch));
-            PatchSafe(harmony, typeof(PlayerInputAxisIntPatch));
-            PatchSafe(harmony, typeof(PlayerInputButtonPatch));
-            PatchSafe(harmony, typeof(ParryPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(PlayerMotorPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(MapPlayerMotorPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(MapPlayerAnimationPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(RewiredPlayerGetAxisPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(RewiredPlayerGetButtonPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(RewiredPlayerGetButtonDownPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(RewiredPlayerGetButtonUpPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(CupheadInputDisplayForButtonPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(PlayerInputAxisPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(PlayerInputAxisIntPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(PlayerInputButtonPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(PlayerInputButtonDownPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(PlayerInputButtonUpPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(ParryPatch));
 
             // Damage authority
-            PatchSafe(harmony, typeof(PlayerDamagePatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(PlayerDamagePatch));
 
             // Scene transitions
-            PatchSafe(harmony, typeof(SceneLoaderLevelsPatch));
-            PatchSafe(harmony, typeof(SceneLoaderScenesPatch));
-            PatchSafe(harmony, typeof(SlotSelectEnterGamePatch));
-            PatchSafe(harmony, typeof(LevelPlayerDeathStatsPatch));
-            PatchSafe(harmony, typeof(SceneLoaderRetryStatsPatch));
-            PatchSafe(harmony, typeof(LevelPlayerParryStatsPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(SceneLoaderLevelsPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(SceneLoaderScenesPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(SlotSelectEnterGamePatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(LevelPlayerDeathStatsPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(SceneLoaderRetryStatsPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(LevelPlayerParryStatsPatch));
+
+            // Deterministic RNG
+            PatchTracked(harmony, registeredPatchTypes, typeof(RandPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(RandIntPatch));
+
+            AuditPatchCoverage(registeredPatchTypes);
 
             Log.LogInfo("[Plugin] Patch pass complete.");
             SessionPausePanel.Ensure();
+        }
+
+        static void PatchTracked(Harmony harmony, HashSet<Type> registeredPatchTypes, Type patchType)
+        {
+            if (registeredPatchTypes != null && patchType != null)
+                registeredPatchTypes.Add(patchType);
+
+            PatchSafe(harmony, patchType);
         }
 
         static void PatchSafe(Harmony harmony, Type patchType)
@@ -203,6 +221,36 @@ namespace CupheadOnline
             catch (Exception ex)
             {
                 Log.LogWarning("[Plugin] SKIP " + patchType.Name + ": " + ex.Message);
+            }
+        }
+
+        static void AuditPatchCoverage(HashSet<Type> registeredPatchTypes)
+        {
+            try
+            {
+                var ignoredTypes = new HashSet<string>
+                {
+                    nameof(MainMenuPatch),
+                };
+
+                var types = Assembly.GetExecutingAssembly().GetTypes();
+                foreach (var type in types)
+                {
+                    if (type == null || !type.IsClass || type.Namespace != "CupheadOnline.Patches")
+                        continue;
+                    if (ignoredTypes.Contains(type.Name))
+                        continue;
+                    if (!Attribute.IsDefined(type, typeof(HarmonyPatch)))
+                        continue;
+                    if (registeredPatchTypes != null && registeredPatchTypes.Contains(type))
+                        continue;
+
+                    Log.LogWarning("[Plugin] Unregistered Harmony patch class detected: " + type.Name);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.LogWarning("[Plugin] Patch coverage audit failed: " + ex.Message);
             }
         }
 
@@ -279,6 +327,6 @@ namespace CupheadOnline
     {
         public const string GUID    = "com.cupheadonline.mod";
         public const string NAME    = "CupHeads";
-        public const string VERSION = "1.2.9";
+        public const string VERSION = "1.2.11";
     }
 }

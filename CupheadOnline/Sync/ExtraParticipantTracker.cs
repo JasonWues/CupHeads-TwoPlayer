@@ -19,6 +19,7 @@ namespace CupheadOnline.Sync
             public Vector2 CameraCenter;
             public Vector2 TopPosition;
             public bool IsDead;
+            public uint LastTick;
             public float LastSeenAt;
             public GameObject Marker;
             public SpriteRenderer MarkerRenderer;
@@ -103,11 +104,16 @@ namespace CupheadOnline.Sync
                 state = new ParticipantState { ParticipantId = pkt.PlayerId };
                 _states[pkt.PlayerId] = state;
             }
+            else if (NetTick.IsOlder(pkt.Tick, state.LastTick))
+            {
+                return;
+            }
 
             state.Position = new Vector2(pkt.PosX, pkt.PosY);
             state.CameraCenter = state.Position;
             state.TopPosition = state.Position;
             state.IsDead = pkt.IsDead;
+            state.LastTick = pkt.Tick;
             state.LastSeenAt = Time.unscaledTime;
 
             MultiplayerSession.RegisterRemoteParticipant(pkt.PlayerId);

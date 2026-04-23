@@ -1,4 +1,5 @@
 using HarmonyLib;
+using CupheadOnline.Sync;
 
 namespace CupheadOnline.Patches
 {
@@ -14,7 +15,7 @@ namespace CupheadOnline.Patches
         {
             if (!MultiplayerSession.IsActive || Plugin.Net == null || !Plugin.Net.IsConnected || player == null)
                 return;
-            if (!MultiplayerSession.IsLocalPlayer(player.id))
+            if (!MultiplayerSession.IsAuthoritativePlayer(player.id))
                 return;
 
             var levelPlayer = player as LevelPlayerController;
@@ -23,6 +24,7 @@ namespace CupheadOnline.Patches
 
             var pkt = PlayerMotorPatch.BuildStatePacket(levelPlayer, levelPlayer.motor);
             Plugin.Net.SendPlayerState(ref pkt);
+            ParticipantStatusTracker.PushLocalStatus(player);
         }
     }
 
