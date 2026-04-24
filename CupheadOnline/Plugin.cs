@@ -31,6 +31,8 @@ namespace CupheadOnline
         static ConfigEntry<bool> _cfgShowCreditsMenu;
         static ConfigEntry<bool> _cfgShowPauseSessionPanel;
         static ConfigEntry<bool> _cfgShowBossHealthBars;
+        static ConfigEntry<bool> _cfgShowBattleAssistHud;
+        static ConfigEntry<bool> _cfgEnableQoLHotkeys;
         static ConfigEntry<bool> _cfgBossHpScalingEnabled;
         static ConfigEntry<float> _cfgBossHpPerExtraPlayer;
         static ConfigEntry<int> _cfgPreferredPlayerColor;
@@ -41,6 +43,8 @@ namespace CupheadOnline
         public static bool ShowCreditsMenu => _cfgShowCreditsMenu == null || _cfgShowCreditsMenu.Value;
         public static bool ShowPauseSessionPanel => _cfgShowPauseSessionPanel == null || _cfgShowPauseSessionPanel.Value;
         public static bool ShowBossHealthBars => _cfgShowBossHealthBars == null || _cfgShowBossHealthBars.Value;
+        public static bool ShowBattleAssistHud => _cfgShowBattleAssistHud == null || _cfgShowBattleAssistHud.Value;
+        public static bool EnableQoLHotkeys => _cfgEnableQoLHotkeys == null || _cfgEnableQoLHotkeys.Value;
         public static bool BossHpScalingEnabled => _cfgBossHpScalingEnabled != null && _cfgBossHpScalingEnabled.Value;
         public static float BossHpPerExtraPlayer =>
             _cfgBossHpPerExtraPlayer == null ? 0.35f : Mathf.Max(0f, _cfgBossHpPerExtraPlayer.Value);
@@ -69,6 +73,10 @@ namespace CupheadOnline
                 "Show the in-game session panel while paused, or when F8 is toggled.");
             _cfgShowBossHealthBars = Config.Bind("UI", "ShowBossHealthBars", true,
                 "Show CupHeads boss health bars during battle levels.");
+            _cfgShowBattleAssistHud = Config.Bind("UI", "ShowBattleAssistHud", true,
+                "Show a compact battle timer/stats HUD during battle levels.");
+            _cfgEnableQoLHotkeys = Config.Bind("Controls", "EnableQoLHotkeys", true,
+                "Enable CupHeads hotkeys: F6 resync, F7 boss bars, F9 copy diagnostics, F10 battle HUD.");
             _cfgBossHpScalingEnabled = Config.Bind("Balance", "EnableBossHpScalingByPlayerCount", false,
                 "Scale battle-level boss HP by connected player count. Disabled by default.");
             _cfgBossHpPerExtraPlayer = Config.Bind("Balance", "BossHpPerExtraPlayer", 0.35f,
@@ -271,8 +279,10 @@ namespace CupheadOnline
             ExtraParticipantTracker.Update();
             ExtraParticipantReviveVisuals.Update();
             PlayerColorSync.Update();
+            QoLHotkeys.Tick();
             BossHealthScaler.Update();
             BossHealthBarOverlay.Tick();
+            BattleAssistHud.Tick();
             SessionSync.Update();
             SessionPausePanel.Ensure();
         }
@@ -290,6 +300,29 @@ namespace CupheadOnline
             PlayerColorSync.Reset();
             BossHealthScaler.Reset();
             BossHealthBarOverlay.Hide();
+            BattleAssistHud.Hide();
+        }
+
+        public static bool ToggleBossHealthBars()
+        {
+            if (_cfgShowBossHealthBars == null)
+                return true;
+
+            _cfgShowBossHealthBars.Value = !_cfgShowBossHealthBars.Value;
+            if (!_cfgShowBossHealthBars.Value)
+                BossHealthBarOverlay.Hide();
+            return _cfgShowBossHealthBars.Value;
+        }
+
+        public static bool ToggleBattleAssistHud()
+        {
+            if (_cfgShowBattleAssistHud == null)
+                return true;
+
+            _cfgShowBattleAssistHud.Value = !_cfgShowBattleAssistHud.Value;
+            if (!_cfgShowBattleAssistHud.Value)
+                BattleAssistHud.Hide();
+            return _cfgShowBattleAssistHud.Value;
         }
 
         public static void SetPreferredPlayerColorSelection(int selection)
@@ -317,6 +350,8 @@ namespace CupheadOnline
                           + "Show Credits Menu: " + ShowCreditsMenu + nl
                           + "Show Pause Session Panel: " + ShowPauseSessionPanel + nl
                           + "Show Boss Health Bars: " + ShowBossHealthBars + nl
+                          + "Show Battle Assist HUD: " + ShowBattleAssistHud + nl
+                          + "QoL Hotkeys Enabled: " + EnableQoLHotkeys + nl
                           + "Boss HP Scaling Enabled: " + BossHpScalingEnabled + nl
                           + "Boss HP Per Extra Player: " + BossHpPerExtraPlayer.ToString("0.00") + nl
                           + BossHealthScaler.GetStatusSummary() + nl;
@@ -334,6 +369,6 @@ namespace CupheadOnline
     {
         public const string GUID    = "com.cupheadonline.mod";
         public const string NAME    = "CupHeads";
-        public const string VERSION = "1.2.13";
+        public const string VERSION = "1.2.14";
     }
 }

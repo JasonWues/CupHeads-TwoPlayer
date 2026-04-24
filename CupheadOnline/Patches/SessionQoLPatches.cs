@@ -1,5 +1,6 @@
 using HarmonyLib;
 using CupheadOnline.Sync;
+using CupheadOnline.UI;
 
 namespace CupheadOnline.Patches
 {
@@ -8,6 +9,7 @@ namespace CupheadOnline.Patches
     {
         static void Prefix(LevelPlayerController __instance, PlayerId playerId)
         {
+            BattleAssistHud.RecordLocalDeath(__instance);
             if (!MultiplayerSession.IsActive) return;
             if (__instance == null || __instance.id != MultiplayerSession.LocalId) return;
             SessionSync.RecordLocalDeath();
@@ -19,6 +21,7 @@ namespace CupheadOnline.Patches
     {
         static void Prefix()
         {
+            BattleAssistHud.RecordRetry();
             if (!MultiplayerSession.IsActive) return;
             SessionSync.RecordLocalRetry();
         }
@@ -29,8 +32,9 @@ namespace CupheadOnline.Patches
     {
         static void Postfix(LevelPlayerWeaponManager __instance)
         {
-            if (!MultiplayerSession.IsActive) return;
             if (__instance == null || __instance.player == null) return;
+            BattleAssistHud.RecordLocalParry(__instance.player);
+            if (!MultiplayerSession.IsActive) return;
             if (__instance.player.id != MultiplayerSession.LocalId) return;
             SessionSync.RecordLocalParry();
         }

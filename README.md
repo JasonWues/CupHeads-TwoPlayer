@@ -27,6 +27,8 @@ Steam P2P multiplayer for Cuphead, plus a desktop installer that handles the mod
 - Live connection HUD with role, status, session info, and sync warnings
 - In-game session panel with `F8` toggle for quick diagnostics and session state
 - Optional boss health bars during battle levels, using Cuphead's live boss health data when available
+- Battle Assist HUD with a live fight timer, deaths, retries, parries, and optional boss HP multiplier readout
+- QoL hotkeys: `F6` quick resync, `F7` boss health bars, `F9` copy diagnostics, and `F10` Battle Assist HUD
 - Optional boss HP scaling per extra active player, configurable in BepInEx and disabled by default
 - Recovery and resync tools for active sessions, including exported diagnostics bundles
 
@@ -39,7 +41,7 @@ Steam P2P multiplayer for Cuphead, plus a desktop installer that handles the mod
 - Clear Steam readiness and connection status messaging
 - Clipboard helpers for lobby IDs and diagnostics
 - Better retry and reconnect guidance when Steam sessions fail
-- Toggleable gameplay HUD features through the BepInEx config, including boss bars and the session panel
+- Toggleable gameplay HUD features through the BepInEx config, including boss bars, Battle Assist, QoL hotkeys, and the session panel
 
 ### Experimental Expanded Sessions
 

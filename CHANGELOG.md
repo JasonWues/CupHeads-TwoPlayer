@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.2.14 - 2026-04-24
+
+- Added a Battle Assist HUD for battle levels with a live timer, local deaths, retries, parries, and optional boss HP multiplier readout.
+- Added QoL hotkeys: `F6` requests a multiplayer resync, `F7` toggles boss health bars, `F9` copies diagnostics to the clipboard, and `F10` toggles Battle Assist.
+- Added BepInEx config toggles for the Battle Assist HUD and QoL hotkeys, plus diagnostics output for both settings.
+- Expanded the existing death/retry/parry hooks so the Battle Assist HUD also works during solo play without requiring an active Steam session.
+
 ## v1.2.13 - 2026-04-24
 
 - Added optional in-battle boss health bars that read Cuphead's live boss health property objects where available, with a DamageReceiver fallback for boss-like enemies.
