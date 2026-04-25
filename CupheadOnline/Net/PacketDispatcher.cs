@@ -62,10 +62,29 @@ namespace CupheadOnline.Net
 
                 case PacketType.DamageEvent:
                 {
-                    // Only CLIENT receives damage confirmations from host
-                    if (MultiplayerSession.IsHost) break;
                     var pkt = new DamageEventPacket();
                     pkt.Read(r);
+
+                    if (MultiplayerSession.IsHost)
+                    {
+                        if (!Plugin.LatencyFriendlyDamage)
+                            break;
+                        if (!MultiplayerSession.IsNetworkControlledParticipant(pkt.TargetPlayerId))
+                            break;
+                        if (sourceParticipantId != byte.MaxValue && sourceParticipantId != pkt.TargetPlayerId)
+                            break;
+
+                        DamageAuthority.ApplyAuthorized(pkt);
+                        break;
+                    }
+
+                    if (Plugin.LatencyFriendlyDamage
+                     && pkt.TargetPlayerId <= (byte)PlayerId.PlayerTwo
+                     && MultiplayerSession.IsLocalPlayer((PlayerId)pkt.TargetPlayerId))
+                    {
+                        break;
+                    }
+
                     DamageAuthority.ApplyAuthorized(pkt);
                     break;
                 }

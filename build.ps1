@@ -101,6 +101,7 @@ function Get-VideoFrameRate([string]$RateText) {
 function Optimize-StartupSplashVideo([string]$AssetsDir) {
     $SplashPath = Join-Path $AssetsDir "StartupSplash\CupHeadsIntro.mp4"
     if (-not (Test-Path $SplashPath)) { return }
+    $UnitySafeTag = "CupHeadsUnitySafeV2"
 
     $Ffprobe = Get-Command ffprobe -ErrorAction SilentlyContinue
     $Ffmpeg  = Get-Command ffmpeg -ErrorAction SilentlyContinue
@@ -109,7 +110,7 @@ function Optimize-StartupSplashVideo([string]$AssetsDir) {
         return
     }
 
-    $Probe = & $Ffprobe.Source -v error -select_streams v:0 -show_entries stream=codec_name,width,height,pix_fmt,avg_frame_rate -of default=noprint_wrappers=1 $SplashPath
+    $Probe = & $Ffprobe.Source -v error -select_streams v:0 -show_entries stream=codec_name,width,height,pix_fmt,avg_frame_rate:format_tags=comment -of default=noprint_wrappers=1 $SplashPath
     $Info = @{}
     foreach ($line in $Probe) {
         $idx = $line.IndexOf("=")
@@ -123,8 +124,9 @@ function Optimize-StartupSplashVideo([string]$AssetsDir) {
     $Width = if ($Info.ContainsKey("width")) { [int]$Info["width"] } else { 0 }
     $Height = if ($Info.ContainsKey("height")) { [int]$Info["height"] } else { 0 }
     $Fps = if ($Info.ContainsKey("avg_frame_rate")) { Get-VideoFrameRate $Info["avg_frame_rate"] } else { 0 }
+    $Comment = if ($Info.ContainsKey("TAG:comment")) { $Info["TAG:comment"] } elseif ($Info.ContainsKey("comment")) { $Info["comment"] } else { "" }
 
-    $NeedsTranscode = $Codec -ne "h264" -or $PixFmt -ne "yuv420p" -or $Width -gt 1920 -or $Height -gt 1080 -or $Fps -gt 31
+    $NeedsTranscode = $Comment -ne $UnitySafeTag -or $Codec -ne "h264" -or $PixFmt -ne "yuv420p" -or $Width -gt 1920 -or $Height -gt 1080 -or $Fps -gt 31
     if (-not $NeedsTranscode) {
         Write-Host "  Startup splash already uses a Unity-friendly video format." -ForegroundColor Green
         return
@@ -134,14 +136,21 @@ function Optimize-StartupSplashVideo([string]$AssetsDir) {
     $TempPath = Join-Path (Split-Path $SplashPath -Parent) "CupHeadsIntro.unitysafe.mp4"
     Remove-Item $TempPath -Force -ErrorAction SilentlyContinue
 
-    & $Ffmpeg.Source -y -i $SplashPath -vf "scale=1920:-2,fps=30,format=yuv420p" -c:v libx264 -profile:v main -level 4.0 -preset medium -crf 20 -c:a aac -b:a 192k -ar 44100 -ac 2 -movflags +faststart $TempPath
+    & $Ffmpeg.Source -y -i $SplashPath `
+        -vf "scale=1920:-2,fps=30,format=yuv420p,tpad=start_mode=clone:start_duration=0.75" `
+        -c:v libx264 -profile:v main -level 4.0 -preset medium -crf 20 `
+        -g 30 -keyint_min 30 -sc_threshold 0 -force_key_frames "expr:gte(t,n_forced*1)" `
+        -c:a aac -b:a 192k -ar 44100 -ac 2 `
+        -metadata "comment=$UnitySafeTag" `
+        -avoid_negative_ts make_zero -fflags +genpts -movflags +faststart -video_track_timescale 30000 `
+        $TempPath
     if ($LASTEXITCODE -ne 0 -or -not (Test-Path $TempPath)) {
         Remove-Item $TempPath -Force -ErrorAction SilentlyContinue
         Fail "Startup splash transcode failed."
     }
 
     Move-Item $TempPath $SplashPath -Force
-    Write-Host "  Startup splash normalized to H.264 1080p30 + AAC." -ForegroundColor Green
+    Write-Host "  Startup splash normalized to Unity-safe H.264 1080p30 + AAC with startup keyframes." -ForegroundColor Green
 }
 
 Write-Host ""

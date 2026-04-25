@@ -42,6 +42,13 @@ namespace CupheadOnline.UI
                 _lastHotkeyAt = Time.unscaledTime;
                 bool enabled = Plugin.ToggleBattleAssistHud();
                 ConnectionHUD.Show(enabled ? "Battle assist HUD enabled." : "Battle assist HUD disabled.");
+                return;
+            }
+
+            if (Input.GetKeyDown(KeyCode.F11))
+            {
+                _lastHotkeyAt = Time.unscaledTime;
+                LocalDevSession.Toggle();
             }
         }
 

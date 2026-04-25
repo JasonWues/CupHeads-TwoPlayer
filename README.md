@@ -21,6 +21,7 @@ Steam P2P multiplayer for Cuphead, plus a desktop installer that handles the mod
 - Networked overworld handoff that spawns both native players, remaps guest controls onto Player Two, and syncs map movement before entering a level
 - Universal input routing so the local player can switch between keyboard and controller at any time without restarting the session
 - Safer remote button-edge handling so jump, dash, confirm, cancel, and menu actions fire once per input press instead of repeating across packet gaps
+- Hybrid co-op authority: the host keeps world, scene, save, boss, RNG, and progression authority, while latency-friendly damage lets each player own hits to their own body
 - Remote menu input routing so guests can drive Player Two interactions in overworld prompts, equip cards, and shop-style internal menus while the host remains authoritative
 - Defensive stale-packet guards for save selection, host snapshots, weapon events, revive grants, damage events, scene loads, and status updates
 - Save compatibility checks with warnings for mismatched progress, DLC state, or setup
@@ -29,6 +30,7 @@ Steam P2P multiplayer for Cuphead, plus a desktop installer that handles the mod
 - Optional boss health bars during battle levels, using Cuphead's live boss health data when available
 - Battle Assist HUD with a live fight timer, deaths, retries, parries, and optional boss HP multiplier readout
 - QoL hotkeys: `F6` quick resync, `F7` boss health bars, `F9` copy diagnostics, and `F10` Battle Assist HUD
+- Local dev simulation with `F11`, letting one PC test the mod's remote-input path by driving Player Two through CupHeads instead of needing a second Steam player
 - Optional startup splash video with audio, skip support, and a configurable Cuphead-style film-static overlay
 - Optional boss HP scaling per extra active player, configurable in BepInEx and disabled by default
 - Recovery and resync tools for active sessions, including exported diagnostics bundles
@@ -43,6 +45,7 @@ Steam P2P multiplayer for Cuphead, plus a desktop installer that handles the mod
 - Clipboard helpers for lobby IDs and diagnostics
 - Better retry and reconnect guidance when Steam sessions fail
 - Toggleable gameplay HUD features through the BepInEx config, including boss bars, Battle Assist, QoL hotkeys, and the session panel
+- Toggleable networking and dev-test settings through the BepInEx config, including latency-friendly damage and the F11 local dev-session hotkey
 - Toggleable startup splash settings through the BepInEx config, including volume, skip support, and static overlay intensity
 
 ### Experimental Expanded Sessions
@@ -140,6 +143,26 @@ During the Steam session, guests are mapped onto Cuphead's native Player Two slo
 Keyboard and controller are both treated as live local inputs while a session is active. If a controller wakes up mid-run or Rewired assigns it to the other vanilla slot, CupHeads still routes it back to the local Steam player and keeps remote Player Two actions driven by the guest's Steam input frames.
 
 Internal scenes such as Porkrind's shop use the same routing path: the host remains the authority for scene transitions, while guest menu buttons are forwarded so Player Two can back out or interact instead of getting stuck on a mismatched local menu.
+
+## Local Dev Testing
+
+Press `F11` to toggle a same-PC local dev session. This does not create a Steam lobby. Instead, it marks Player One as the local host player and Player Two as the network-controlled participant, then feeds Player Two through CupHeads' `RemoteInputDriver`.
+
+Recommended solo test flow:
+
+1. Launch Cuphead and press `F11` before opening a save or level.
+2. Start a normal save file.
+3. Use Player One controls for Cuphead.
+4. Use Player Two/controller bindings for Mugman.
+5. Press `F11` again to stop the dev session.
+
+This mode is meant for auditing movement, map interactions, equip/shop menus, death/revive behavior, and boss fights without waiting for a second tester. It is not a substitute for a real Steam P2P test because it does not simulate network jitter, packet loss, Steam lobby joining, or two separate machines.
+
+## Authority Model
+
+CupHeads uses a hybrid co-op model. The host remains authoritative for world state: saves, scene transitions, level starts, boss/enemy state, RNG seeds, progression, retries, and menu flow. For player feel, `Networking.LatencyFriendlyDamage` is enabled by default so each peer owns damage to their own player body. In practical terms, a guest who dodges on their own screen should not lose HP purely because the host saw an older lagged position.
+
+If you need to compare behavior against the older strict host-authoritative damage model, set `LatencyFriendlyDamage = false` under `[Networking]` in `BepInEx/config/com.cupheadonline.mod.cfg`.
 
 ## Building from source
 

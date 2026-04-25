@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.2.22 - 2026-04-25
+
+- Added latency-friendly co-op damage: each peer now owns damage to their own player body while the host still owns scenes, saves, boss state, RNG, and progression.
+- Added a fallback config switch, `Networking.LatencyFriendlyDamage`, so the older host-authoritative damage model can be restored if needed for testing.
+- Softened client position correction while latency-friendly damage is enabled, reducing small rubber-band pulls during tight boss movement.
+- Added F11 local dev simulation mode so one PC can test the CupHeads remote-input path with Player One local and Player Two driven through the mod's network-controlled slot.
+- Added `Debug.EnableLocalDevSessionHotkey` and diagnostics output for local dev testing.
+- Reworked startup splash normalization to force frame-zero/keyframe-friendly H.264 output and add a short first-frame hold so Unity 2017 is less likely to appear to skip the opening second.
+
 ## v1.2.21 - 2026-04-24
 
 - Added installer verification for the embedded `CupheadOnline.dll` version, so stale installs such as `1.2.18` fail verification instead of appearing healthy.

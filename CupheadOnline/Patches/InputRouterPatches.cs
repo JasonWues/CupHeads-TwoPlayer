@@ -126,28 +126,33 @@ namespace CupheadOnline.Patches
 
         internal static InputFramePacket BuildLocalInputFrame()
         {
+            return BuildLocalInputFrameForPlayer(PlayerId.None);
+        }
+
+        internal static InputFramePacket BuildLocalInputFrameForPlayer(PlayerId playerId)
+        {
             uint buttons = 0;
-            Pack(CupheadButton.Jump, ref buttons);
-            Pack(CupheadButton.Shoot, ref buttons);
-            Pack(CupheadButton.Super, ref buttons);
-            Pack(CupheadButton.SwitchWeapon, ref buttons);
-            Pack(CupheadButton.Lock, ref buttons);
-            Pack(CupheadButton.Dash, ref buttons);
-            Pack(CupheadButton.Pause, ref buttons);
-            Pack(CupheadButton.NextPage, ref buttons);
-            Pack(CupheadButton.PreviousPage, ref buttons);
-            Pack(CupheadButton.Accept, ref buttons);
-            Pack(CupheadButton.Cancel, ref buttons);
-            Pack(CupheadButton.EquipMenu, ref buttons);
-            Pack(CupheadButton.MenuUp, ref buttons);
-            Pack(CupheadButton.MenuLeft, ref buttons);
-            Pack(CupheadButton.MenuDown, ref buttons);
-            Pack(CupheadButton.MenuRight, ref buttons);
+            Pack(playerId, CupheadButton.Jump, ref buttons);
+            Pack(playerId, CupheadButton.Shoot, ref buttons);
+            Pack(playerId, CupheadButton.Super, ref buttons);
+            Pack(playerId, CupheadButton.SwitchWeapon, ref buttons);
+            Pack(playerId, CupheadButton.Lock, ref buttons);
+            Pack(playerId, CupheadButton.Dash, ref buttons);
+            Pack(playerId, CupheadButton.Pause, ref buttons);
+            Pack(playerId, CupheadButton.NextPage, ref buttons);
+            Pack(playerId, CupheadButton.PreviousPage, ref buttons);
+            Pack(playerId, CupheadButton.Accept, ref buttons);
+            Pack(playerId, CupheadButton.Cancel, ref buttons);
+            Pack(playerId, CupheadButton.EquipMenu, ref buttons);
+            Pack(playerId, CupheadButton.MenuUp, ref buttons);
+            Pack(playerId, CupheadButton.MenuLeft, ref buttons);
+            Pack(playerId, CupheadButton.MenuDown, ref buttons);
+            Pack(playerId, CupheadButton.MenuRight, ref buttons);
 
             float axisX;
             float axisY;
-            TryGetLocalAxis(0, out axisX);
-            TryGetLocalAxis(1, out axisY);
+            TryGetLocalAxis(playerId, 0, out axisX);
+            TryGetLocalAxis(playerId, 1, out axisY);
 
             return new InputFramePacket
             {
@@ -177,11 +182,41 @@ namespace CupheadOnline.Patches
             _nextInputTick = 1;
         }
 
-        static void Pack(CupheadButton button, ref uint buttons)
+        static void Pack(PlayerId playerId, CupheadButton button, ref uint buttons)
         {
             bool pressed;
-            if (TryGetLocalButton((int)button, false, false, out pressed) && pressed)
+            if (TryGetLocalButton(playerId, (int)button, false, false, out pressed) && pressed)
                 buttons |= 1u << (int)button;
+        }
+
+        internal static bool TryGetLocalButton(PlayerId playerId, int actionId, bool down, bool up, out bool value)
+        {
+            if (playerId == PlayerId.None)
+                return TryGetLocalButton(actionId, down, up, out value);
+
+            value = false;
+            if (!IsValidButton(actionId))
+                return true;
+
+            MethodInfo method = down ? RewiredGetButtonDownMethod : up ? RewiredGetButtonUpMethod : RewiredGetButtonMethod;
+            if (method == null)
+                return false;
+
+            value = RawBool(GetActions(playerId), method, actionId);
+            return true;
+        }
+
+        internal static bool TryGetLocalAxis(PlayerId playerId, int actionId, out float value)
+        {
+            if (playerId == PlayerId.None)
+                return TryGetLocalAxis(actionId, out value);
+
+            value = 0f;
+            if (RewiredGetAxisMethod == null)
+                return false;
+
+            value = RawFloat(GetActions(playerId), RewiredGetAxisMethod, actionId);
+            return true;
         }
 
         static bool RawBool(object player, MethodInfo method, int actionId)
@@ -272,7 +307,9 @@ namespace CupheadOnline.Patches
             }
 
             if (MultiplayerSession.IsLocalPlayer(owner)
-             && UniversalInputRouter.TryGetLocalAxis(actionId, out value))
+             && (LocalDevSession.IsActive
+                    ? UniversalInputRouter.TryGetLocalAxis(owner, actionId, out value)
+                    : UniversalInputRouter.TryGetLocalAxis(actionId, out value)))
             {
                 __result = value;
             }
@@ -310,7 +347,9 @@ namespace CupheadOnline.Patches
             }
 
             if (MultiplayerSession.IsLocalPlayer(owner)
-             && UniversalInputRouter.TryGetLocalButton(actionId, down, up, out value))
+             && (LocalDevSession.IsActive
+                    ? UniversalInputRouter.TryGetLocalButton(owner, actionId, down, up, out value)
+                    : UniversalInputRouter.TryGetLocalButton(actionId, down, up, out value)))
             {
                 result = result || value;
             }

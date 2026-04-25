@@ -25,6 +25,7 @@ namespace CupheadOnline.Sync
         private static byte   _pendingSource;
         private static PlayerId _pendingTarget = PlayerId.None;
         private static bool   _pendingReady;
+        private static bool   _applyingAuthorizedDamage;
         private static readonly Dictionary<byte, uint> _lastAppliedTicks =
             new Dictionary<byte, uint>(2);
         private static readonly FieldInfo _damageInfoStoneTimeField =
@@ -36,6 +37,8 @@ namespace CupheadOnline.Sync
         {
             MultiplayerSession.OnSessionEnded += ResetAll;
         }
+
+        public static bool IsApplyingAuthorizedDamage => _applyingAuthorizedDamage;
 
         // ──────────────────────────────────────────────────────────────────────
         //  Called by PacketDispatcher on DamageEventPacket received
@@ -92,10 +95,12 @@ namespace CupheadOnline.Sync
 
             try
             {
+                _applyingAuthorizedDamage = true;
                 dr.TakeDamage(info);
             }
             finally
             {
+                _applyingAuthorizedDamage = false;
                 Reset();
             }
         }
@@ -124,6 +129,7 @@ namespace CupheadOnline.Sync
             _pendingSource = 0;
             _pendingTarget = PlayerId.None;
             _pendingReady = false;
+            _applyingAuthorizedDamage = false;
         }
 
         public static void ResetAll()

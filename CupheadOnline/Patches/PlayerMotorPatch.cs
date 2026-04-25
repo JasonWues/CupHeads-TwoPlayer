@@ -167,12 +167,16 @@ namespace CupheadOnline.Patches
 
             var target = new Vector3(snapshot.PosX, snapshot.PosY, motor.transform.position.z);
             float distance = Vector2.Distance(motor.transform.position, target);
-            if (distance < 0.35f)
+            float deadZone = Plugin.LatencyFriendlyDamage ? 0.85f : 0.35f;
+            float snapDistance = Plugin.LatencyFriendlyDamage ? 8f : 4f;
+            float blend = Plugin.LatencyFriendlyDamage ? 0.08f : 0.18f;
+
+            if (distance < deadZone)
                 return;
 
-            motor.transform.position = distance > 4f
+            motor.transform.position = distance > snapDistance
                 ? target
-                : Vector3.Lerp(motor.transform.position, target, 0.18f);
+                : Vector3.Lerp(motor.transform.position, target, blend);
         }
     }
 

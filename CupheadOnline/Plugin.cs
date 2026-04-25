@@ -34,6 +34,8 @@ namespace CupheadOnline
         static ConfigEntry<bool> _cfgShowBossHealthBars;
         static ConfigEntry<bool> _cfgShowBattleAssistHud;
         static ConfigEntry<bool> _cfgEnableQoLHotkeys;
+        static ConfigEntry<bool> _cfgLatencyFriendlyDamage;
+        static ConfigEntry<bool> _cfgEnableLocalDevSession;
         static ConfigEntry<bool> _cfgEnableStartupSplash;
         static ConfigEntry<bool> _cfgStartupSplashAllowSkip;
         static ConfigEntry<bool> _cfgStartupSplashStaticOverlay;
@@ -51,6 +53,8 @@ namespace CupheadOnline
         public static bool ShowBossHealthBars => _cfgShowBossHealthBars == null || _cfgShowBossHealthBars.Value;
         public static bool ShowBattleAssistHud => _cfgShowBattleAssistHud == null || _cfgShowBattleAssistHud.Value;
         public static bool EnableQoLHotkeys => _cfgEnableQoLHotkeys == null || _cfgEnableQoLHotkeys.Value;
+        public static bool LatencyFriendlyDamage => _cfgLatencyFriendlyDamage == null || _cfgLatencyFriendlyDamage.Value;
+        public static bool EnableLocalDevSession => _cfgEnableLocalDevSession != null && _cfgEnableLocalDevSession.Value;
         public static bool EnableStartupSplash => _cfgEnableStartupSplash == null || _cfgEnableStartupSplash.Value;
         public static bool StartupSplashAllowSkip => _cfgStartupSplashAllowSkip == null || _cfgStartupSplashAllowSkip.Value;
         public static bool StartupSplashStaticOverlay => _cfgStartupSplashStaticOverlay != null && _cfgStartupSplashStaticOverlay.Value;
@@ -90,6 +94,10 @@ namespace CupheadOnline
                 "Show a compact battle timer/stats HUD during battle levels.");
             _cfgEnableQoLHotkeys = Config.Bind("Controls", "EnableQoLHotkeys", true,
                 "Enable CupHeads hotkeys: F6 resync, F7 boss bars, F9 copy diagnostics, F10 battle HUD.");
+            _cfgLatencyFriendlyDamage = Config.Bind("Networking", "LatencyFriendlyDamage", true,
+                "Trust each peer for damage to their own player body. The host still owns scenes, saves, boss state, RNG, and progression.");
+            _cfgEnableLocalDevSession = Config.Bind("Debug", "EnableLocalDevSessionHotkey", true,
+                "Enable F11 local dev simulation: Player One is local, Player Two is driven through CupHeads' remote-input path on the same PC.");
             _cfgEnableStartupSplash = Config.Bind("StartupSplash", "EnableStartupSplash", true,
                 "Play BepInEx/plugins/CupheadOnline/Assets/CupHeadsIntro.mp4 over the game's startup/title intro.");
             _cfgStartupSplashAllowSkip = Config.Bind("StartupSplash", "AllowSkip", true,
@@ -305,6 +313,7 @@ namespace CupheadOnline
             MainThreadQueue.Drain();
             Net?.Poll();
             MultiplayerSession.EnsureCupheadMultiplayerState();
+            LocalDevSession.Update();
             ClientInputFramePump.Update();
             LoadoutReplicator.Update();
             EnemySyncManager.HostTick();
@@ -387,6 +396,9 @@ namespace CupheadOnline
                           + "Show Boss Health Bars: " + ShowBossHealthBars + nl
                           + "Show Battle Assist HUD: " + ShowBattleAssistHud + nl
                           + "QoL Hotkeys Enabled: " + EnableQoLHotkeys + nl
+                          + "Latency Friendly Damage: " + LatencyFriendlyDamage + nl
+                          + "Local Dev Session Enabled: " + EnableLocalDevSession + nl
+                          + "Local Dev Session Active: " + LocalDevSession.IsActive + nl
                           + "Startup Splash Enabled: " + EnableStartupSplash + nl
                           + "Startup Splash Video: " + (StartupSplashPlayer.ResolveVideoPath() ?? "missing") + nl
                           + "Startup Splash Static: " + StartupSplashStaticOverlay + nl
@@ -408,6 +420,6 @@ namespace CupheadOnline
     {
         public const string GUID    = "com.cupheadonline.mod";
         public const string NAME    = "CupHeads";
-        public const string VERSION = "1.2.21";
+        public const string VERSION = "1.2.22";
     }
 }
