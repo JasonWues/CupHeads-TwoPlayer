@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.2.21 - 2026-04-24
+
+- Added installer verification for the embedded `CupheadOnline.dll` version, so stale installs such as `1.2.18` fail verification instead of appearing healthy.
+- The installer now blocks installation while `Cuphead.exe` is running, preventing Windows from keeping the old loaded DLL in place.
+- Improved final installer success text so it reports the exact CupHeads version that should appear in the BepInEx log.
+
 ## v1.2.20 - 2026-04-24
 
 - Hardened startup splash playback against Unity 2017 `VideoPlayer` callback loops by detaching the prepare callback as soon as it fires.

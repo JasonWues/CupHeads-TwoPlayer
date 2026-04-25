@@ -100,7 +100,7 @@ The Electron installer:
 - always refreshes `CupheadOnline.dll` in `Cuphead\\BepInEx\\plugins\\CupheadOnline\\`
 - refreshes the optional startup splash video in `Cuphead\\BepInEx\\plugins\\CupheadOnline\\Assets\\`
 - removes stale `LiteNetLib.dll` leftovers from the older UDP transport
-- verifies the final install before finishing
+- verifies the final install before finishing, including checking that the installed DLL contains the same CupHeads version as the installer
 
 ## Custom Startup Splash
 
@@ -117,6 +117,8 @@ BepInEx/plugins/CupheadOnline/Assets/CupHeadsIntro.mp4
 ```
 
 Recommended export settings are MP4/H.264 video, AAC audio, 30 FPS, 16:9, and around 3-8 seconds. Avoid HEVC/H.265 exports because Cuphead's Unity 2017 video player usually cannot decode them. The mod pauses and silences Cuphead while the splash plays so it behaves like a real boot card; baked-in static is recommended, and the optional generated static overlay is off by default.
+
+If the BepInEx log says an older version such as `CupHeads 1.2.18 loading...`, the old DLL is still installed. Close Cuphead completely, download the newest `CupHeads.exe` from Releases, run Install again, and confirm the next log says the current release version. As an emergency bypass, set `EnableStartupSplash = false` under `[StartupSplash]` in `BepInEx/config/com.cupheadonline.mod.cfg`.
 
 The mod then patches the game's menu and gameplay flow through Harmony and uses Steamworks P2P for multiplayer.
 

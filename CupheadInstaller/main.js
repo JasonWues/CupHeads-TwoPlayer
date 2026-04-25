@@ -178,6 +178,44 @@ function getPluginDir(cupheadDir, manifest) {
   return path.join(cupheadDir, 'BepInEx', 'plugins', activeManifest.pluginFolder);
 }
 
+function isCupheadRunning() {
+  try {
+    const output = execSync('tasklist /FI "IMAGENAME eq Cuphead.exe" /NH', {
+      encoding: 'utf8',
+      timeout: 3000,
+      windowsHide: true,
+    });
+    return /\bCuphead\.exe\b/i.test(output);
+  } catch {
+    return false;
+  }
+}
+
+function inspectPluginDllVersion(dllPath) {
+  const expectedVersion = app.getVersion();
+  const result = {
+    path: dllPath,
+    expectedVersion,
+    detectedVersions: [],
+    matchesExpected: false,
+  };
+
+  try {
+    if (!dllPath || !fs.existsSync(dllPath))
+      return result;
+
+    const buffer = fs.readFileSync(dllPath);
+    const text = buffer.toString('utf16le');
+    const versions = text.match(/\b\d+\.\d+\.\d+\b/g) || [];
+    result.detectedVersions = Array.from(new Set(versions));
+    result.matchesExpected = text.includes(expectedVersion);
+  } catch (err) {
+    result.error = err.message;
+  }
+
+  return result;
+}
+
 function getInstallState(dir) {
   const manifest = loadInstallManifest();
 
@@ -194,6 +232,8 @@ function getInstallState(dir) {
       missingPluginFiles: manifest.files.map((file) => file.target),
       hasLegacyFiles: false,
       legacyFilesPresent: [],
+      pluginVersion: null,
+      pluginVersionOk: false,
       manifest,
     };
   }
@@ -212,6 +252,8 @@ function getInstallState(dir) {
 
   const legacyFilesPresent = manifest.legacyCleanup.filter((name) =>
     fs.existsSync(path.join(pluginDir, name)));
+  const pluginDllPath = path.join(pluginDir, 'CupheadOnline.dll');
+  const pluginVersion = inspectPluginDllVersion(pluginDllPath);
 
   const state = {
     valid: fs.existsSync(path.join(dir, 'Cuphead.exe')),
@@ -224,6 +266,8 @@ function getInstallState(dir) {
     missingPluginFiles,
     hasLegacyFiles: legacyFilesPresent.length > 0,
     legacyFilesPresent,
+    pluginVersion,
+    pluginVersionOk: pluginVersion.matchesExpected,
     manifest,
   };
 
@@ -256,6 +300,23 @@ function verifyInstall(dir) {
     };
   }
 
+  if (!checks.pluginVersionOk) {
+    const detected = checks.pluginVersion && checks.pluginVersion.detectedVersions.length
+      ? checks.pluginVersion.detectedVersions.join(', ')
+      : 'unknown';
+    return {
+      ok: false,
+      message: 'CupheadOnline.dll is not the bundled installer version. Expected '
+        + app.getVersion()
+        + ', detected '
+        + detected
+        + '. Close Cuphead, run Install again, and make sure the log says CupHeads '
+        + app.getVersion()
+        + '.',
+      checks,
+    };
+  }
+
   if (checks.hasLegacyFiles) {
     return {
       ok: true,
@@ -268,7 +329,7 @@ function verifyInstall(dir) {
 
   return {
     ok: true,
-    message: 'Install looks good. BepInEx and bundled mod files are all in place.',
+    message: 'Install looks good. BepInEx and CupHeads ' + app.getVersion() + ' are in place.',
     checks,
   };
 }
@@ -539,6 +600,12 @@ ipcMain.on('install', async (event, { cupheadDir, skipBepInEx }) => {
 
     if (!existingState.valid)
       throw new Error('Pick a valid Cuphead folder before installing.');
+
+    if (isCupheadRunning()) {
+      throw new Error(
+        'Cuphead is currently running. Close the game completely, then press Install again so Windows can replace the old mod DLL.'
+      );
+    }
 
     if (!skipBepInEx) {
       const arch = getCupheadArch(cupheadDir);
