@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.2.36 - 2026-04-27
+
+- Normalized LAN paired-report keys so same-PC host/client test reports pair under one shared session key instead of using each side's local address.
+- Verified automatic local report export after a two-window LAN Slime fight and graceful shutdown.
+
 ## v1.2.35 - 2026-04-27
 
 - Automatically creates a local paired bug-report folder after a connected multiplayer session disconnects, errors, or is shut down, so players do not need to click `EXPORT BUG REPORT` after reproducing a problem.

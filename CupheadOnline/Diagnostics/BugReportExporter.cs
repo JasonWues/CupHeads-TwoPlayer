@@ -131,11 +131,14 @@ namespace CupheadOnline.Diagnostics
             if (Plugin.Net == null)
                 return "offline-no-session";
 
+            if (Plugin.Net.IsLanEmulationActive)
+                return "lan-session-port-" + Plugin.LanPort;
+
             string lobbyId = Plugin.Net.CurrentLobbyId;
             if (string.IsNullOrEmpty(lobbyId))
                 return "no-lobby-" + Plugin.Net.CurrentStateName;
 
-            return (Plugin.Net.IsLanEmulationActive ? "lan-" : "steam-lobby-") + lobbyId;
+            return "steam-lobby-" + lobbyId;
         }
 
         static string GetPairingSlug()

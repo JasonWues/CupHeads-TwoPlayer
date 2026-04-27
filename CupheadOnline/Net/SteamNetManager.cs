@@ -2638,10 +2638,13 @@ namespace CupheadOnline.Net
 
         string BuildPairingKeyForLog()
         {
+            if (_lanActive)
+                return "lan-session-port-" + Plugin.LanPort;
+
             string lobby = CurrentLobbyId;
             if (string.IsNullOrEmpty(lobby))
                 return "no-lobby-" + _state;
-            return (_lanActive ? "lan-" : "steam-lobby-") + lobby;
+            return "steam-lobby-" + lobby;
         }
 
         static string OneLine(string value)
