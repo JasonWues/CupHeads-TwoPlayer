@@ -33,6 +33,8 @@ namespace CupheadOnline.Net
         ReviveRequest = 20,
         ReviveGrant = 21,
         MapDialogue = 22,
+        BattleAssistStats = 23,
+        ReviveVisual = 24,
     }
 
     public enum SessionSignalKind : byte
@@ -436,6 +438,10 @@ namespace CupheadOnline.Net
         public int CurrentLevel;
         public int CurrentMapScene;
         public uint HostTick;
+        public float BattleElapsedSeconds;
+        public ushort BattleDeaths;
+        public ushort BattleRetries;
+        public ushort BattleParries;
         public string SceneName;
 
         public bool HasTrackedSave => (Flags & 1) != 0;
@@ -450,6 +456,10 @@ namespace CupheadOnline.Net
             w.Write(CurrentLevel);
             w.Write(CurrentMapScene);
             w.Write(HostTick);
+            w.Write(BattleElapsedSeconds);
+            w.Write(BattleDeaths);
+            w.Write(BattleRetries);
+            w.Write(BattleParries);
             w.Write(SceneName ?? string.Empty);
         }
 
@@ -461,7 +471,45 @@ namespace CupheadOnline.Net
             CurrentLevel = r.ReadInt32();
             CurrentMapScene = r.ReadInt32();
             HostTick = r.ReadUInt32();
+            BattleElapsedSeconds = 0f;
+            BattleDeaths = 0;
+            BattleRetries = 0;
+            BattleParries = 0;
+            if (r.BaseStream.Position <= r.BaseStream.Length - 10)
+            {
+                BattleElapsedSeconds = r.ReadSingle();
+                BattleDeaths = r.ReadUInt16();
+                BattleRetries = r.ReadUInt16();
+                BattleParries = r.ReadUInt16();
+            }
             SceneName = r.ReadString();
+        }
+    }
+
+    public struct BattleAssistStatsPacket : IPacket
+    {
+        public byte ParticipantId;
+        public int CurrentLevel;
+        public ushort Deaths;
+        public ushort Parries;
+        public uint Tick;
+
+        public void Write(BinaryWriter w)
+        {
+            w.Write(ParticipantId);
+            w.Write(CurrentLevel);
+            w.Write(Deaths);
+            w.Write(Parries);
+            w.Write(Tick);
+        }
+
+        public void Read(BinaryReader r)
+        {
+            ParticipantId = r.ReadByte();
+            CurrentLevel = r.ReadInt32();
+            Deaths = r.ReadUInt16();
+            Parries = r.ReadUInt16();
+            Tick = r.ReadUInt32();
         }
     }
 
@@ -469,6 +517,8 @@ namespace CupheadOnline.Net
     {
         public byte Signal;
         public ushort SaveRevision;
+        public float HostBattleElapsed;
+        public uint Tick;
 
         public SessionSignalKind Kind => (SessionSignalKind)Signal;
 
@@ -476,12 +526,20 @@ namespace CupheadOnline.Net
         {
             w.Write(Signal);
             w.Write(SaveRevision);
+            w.Write(HostBattleElapsed);
+            w.Write(Tick);
         }
 
         public void Read(BinaryReader r)
         {
             Signal = r.ReadByte();
             SaveRevision = r.ReadUInt16();
+            HostBattleElapsed = -1f;
+            Tick = 0u;
+            if (r.BaseStream.Position <= r.BaseStream.Length - 4)
+                HostBattleElapsed = r.ReadSingle();
+            if (r.BaseStream.Position <= r.BaseStream.Length - 4)
+                Tick = r.ReadUInt32();
         }
     }
 
@@ -594,6 +652,44 @@ namespace CupheadOnline.Net
             DialogueId = r.ReadInt32();
             Choice = r.ReadInt32();
             Tick = r.ReadUInt32();
+        }
+    }
+
+    public struct ReviveVisualPacket : IPacket
+    {
+        public byte TargetParticipantId;
+        public byte DonorParticipantId;
+        public byte Flags;
+        public float PosX;
+        public float PosY;
+        public uint Tick;
+        public float HostBattleElapsed;
+
+        public bool ParrySwitch => (Flags & 1) != 0;
+        public bool HasHostBattleElapsed => HostBattleElapsed >= 0f;
+
+        public void Write(BinaryWriter w)
+        {
+            w.Write(TargetParticipantId);
+            w.Write(DonorParticipantId);
+            w.Write(Flags);
+            w.Write(PosX);
+            w.Write(PosY);
+            w.Write(Tick);
+            w.Write(HostBattleElapsed);
+        }
+
+        public void Read(BinaryReader r)
+        {
+            TargetParticipantId = r.ReadByte();
+            DonorParticipantId = r.ReadByte();
+            Flags = r.ReadByte();
+            PosX = r.ReadSingle();
+            PosY = r.ReadSingle();
+            Tick = r.ReadUInt32();
+            HostBattleElapsed = -1f;
+            if (r.BaseStream.Position <= r.BaseStream.Length - 4)
+                HostBattleElapsed = r.ReadSingle();
         }
     }
 }

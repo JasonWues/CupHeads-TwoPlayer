@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using HarmonyLib;
 using CupheadOnline.Net;
+using CupheadOnline.Patches;
 using UnityEngine;
 
 namespace CupheadOnline.Sync
@@ -61,7 +63,7 @@ namespace CupheadOnline.Sync
         {
             if (pkt.PlayerId > (byte)PlayerId.PlayerTwo)
             {
-                if (Plugin.VanillaTwoPlayerOnline)
+                if (pkt.IsMapState)
                     return;
 
                 var extraState = GetOrCreateState(pkt.PlayerId);
@@ -86,6 +88,7 @@ namespace CupheadOnline.Sync
             if (MultiplayerSession.IsClient && MultiplayerSession.IsLocalPlayer(playerId))
             {
                 StoreLocalAuthoritySnapshot(pkt);
+                ApplyLocalAuthoritySnapshot(playerId, pkt);
                 return;
             }
 
@@ -110,7 +113,7 @@ namespace CupheadOnline.Sync
         /// </summary>
         public static PlayerStatePacket? GetNextSnapshot(PlayerId playerId)
         {
-            return GetNextSnapshot((byte)playerId);
+            return GetNextSnapshot((byte)playerId, mapState: false);
         }
 
         public static PlayerStatePacket? GetNextSnapshot(byte participantId)
@@ -152,6 +155,19 @@ namespace CupheadOnline.Sync
             return state.HasLast && state.Last.IsMapState == mapState
                 ? (PlayerStatePacket?)state.Last
                 : null;
+        }
+
+        public static bool TryGetLatestSnapshot(byte participantId, bool mapState, out PlayerStatePacket snapshot)
+        {
+            var state = GetOrCreateState(participantId);
+            if (state.HasLast && state.Last.IsMapState == mapState)
+            {
+                snapshot = state.Last;
+                return true;
+            }
+
+            snapshot = default(PlayerStatePacket);
+            return false;
         }
 
         public static bool TryGetLocalAuthoritySnapshot(PlayerId playerId, out PlayerStatePacket snapshot)
@@ -234,7 +250,7 @@ namespace CupheadOnline.Sync
 
         static int GetTargetBuffer(byte participantId)
         {
-            if (Plugin.VanillaTwoPlayerOnline && participantId <= (byte)PlayerId.PlayerTwo)
+            if (participantId <= (byte)PlayerId.PlayerTwo)
                 return 0;
 
             return TargetBuffer;
@@ -251,6 +267,31 @@ namespace CupheadOnline.Sync
 
             _localAuthorityTicks[pkt.PlayerId] = pkt.Tick;
             _localAuthoritySnapshots[pkt.PlayerId] = pkt;
+        }
+
+        static void ApplyLocalAuthoritySnapshot(PlayerId playerId, PlayerStatePacket pkt)
+        {
+            if (pkt.IsMapState || playerId > PlayerId.PlayerTwo)
+                return;
+
+            var controller = MultiplayerSession.GetController(playerId);
+            if (controller == null || controller.motor == null)
+                return;
+
+            var motor = controller.motor;
+            motor.transform.position = new Vector3(pkt.PosX, pkt.PosY, motor.transform.position.z);
+
+            var t = Traverse.Create(motor);
+            t.Property("LookDirection").SetValue(new Trilean2(pkt.LookX, pkt.LookY));
+            t.Property("TrueLookDirection").SetValue(new Trilean2(pkt.LookX, pkt.LookY));
+            t.Property("Grounded").SetValue(pkt.Grounded);
+            t.Property("Dashing").SetValue(pkt.Dashing);
+            t.Property("Ducking").SetValue(pkt.Ducking);
+            t.Property("GravityReversed").SetValue(pkt.GravReversed);
+            t.Property("IsHit").SetValue(pkt.IsHit);
+            t.Property("IsUsingSuperOrEx").SetValue(pkt.IsSuper);
+
+            PlayerMotorPatch.ApplyRemoteAnimation(controller, pkt);
         }
 
         static void RaiseEvent(LevelPlayerMotor motor, FieldInfo fi)

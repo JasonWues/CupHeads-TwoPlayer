@@ -46,7 +46,11 @@ namespace CupheadOnline.Sync
                 return;
 
             ParticipantStatus existing;
-            if (_statuses.TryGetValue(pkt.ParticipantId, out existing)
+            bool hasExisting = _statuses.TryGetValue(pkt.ParticipantId, out existing);
+            if (ShouldIgnoreRemoteAliveStatusWhileLocallyDead(existing, pkt, fromRemote, hasExisting))
+                return;
+
+            if (hasExisting
              && NetTick.IsOlder(pkt.Tick, existing.Tick)
              && !ShouldAcceptRemoteHostBuiltInRevive(existing, pkt, fromRemote))
             {
@@ -66,8 +70,10 @@ namespace CupheadOnline.Sync
                 Tick = pkt.Tick,
             };
 
-            LogStatusTransition(existing, pkt, fromRemote);
+            LogStatusTransition(hasExisting ? existing : default(ParticipantStatus), pkt, fromRemote, hasExisting);
             if (fromRemote && ParticipantReviveController.TryMirrorHostBuiltInRevive(pkt))
+                return;
+            if (fromRemote && ParticipantReviveController.TryMirrorHostBuiltInDeath(pkt))
                 return;
 
             if (fromRemote)
@@ -77,9 +83,38 @@ namespace CupheadOnline.Sync
         static bool ShouldIgnoreRemoteBuiltInStatus(PlayerStatusPacket pkt, bool fromRemote)
         {
             return fromRemote
-                && Plugin.VanillaTwoPlayerOnline
                 && MultiplayerSession.IsHost
                 && pkt.ParticipantId <= (byte)PlayerId.PlayerTwo;
+        }
+
+        static bool ShouldIgnoreRemoteAliveStatusWhileLocallyDead(
+            ParticipantStatus existing,
+            PlayerStatusPacket pkt,
+            bool fromRemote,
+            bool hasExisting)
+        {
+            if (!fromRemote
+             || !MultiplayerSession.IsClient
+             || pkt.ParticipantId > (byte)PlayerId.PlayerTwo
+             || !hasExisting
+             || !existing.IsDead
+             || pkt.IsDead
+             || pkt.Health <= 1)
+            {
+                return false;
+            }
+
+            Plugin.Log.LogInfo(
+                "[StatusSync] Ignored stale alive status for local "
+                + (PlayerId)pkt.ParticipantId
+                + " while death-heart revive is pending: hp="
+                + pkt.Health
+                + "/"
+                + pkt.HealthMax
+                + " tick="
+                + pkt.Tick
+                + ".");
+            return true;
         }
 
         static bool ShouldAcceptRemoteHostBuiltInRevive(
@@ -88,7 +123,6 @@ namespace CupheadOnline.Sync
             bool fromRemote)
         {
             if (!fromRemote
-             || !Plugin.VanillaTwoPlayerOnline
              || !MultiplayerSession.IsClient
              || pkt.ParticipantId > (byte)PlayerId.PlayerTwo)
             {
@@ -97,6 +131,8 @@ namespace CupheadOnline.Sync
 
             bool remoteSaysRevived = !pkt.IsDead && pkt.Health > 0;
             if (!existing.IsDead || !remoteSaysRevived)
+                return false;
+            if (pkt.Health > 1)
                 return false;
 
             Plugin.Log.LogInfo(
@@ -201,11 +237,13 @@ namespace CupheadOnline.Sync
                 Plugin.Net.SendPlayerStatus(ref pkt);
         }
 
-        static void LogStatusTransition(ParticipantStatus existing, PlayerStatusPacket pkt, bool fromRemote)
+        static void LogStatusTransition(
+            ParticipantStatus existing,
+            PlayerStatusPacket pkt,
+            bool fromRemote,
+            bool hasExisting)
         {
-            if (pkt.ParticipantId > (byte)PlayerId.PlayerTwo)
-                return;
-            if (!existing.IsKnown)
+            if (!hasExisting || pkt.ParticipantId > (byte)PlayerId.PlayerTwo)
                 return;
             if (existing.IsDead == pkt.IsDead)
                 return;

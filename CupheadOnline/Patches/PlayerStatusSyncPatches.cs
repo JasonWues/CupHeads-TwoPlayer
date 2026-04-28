@@ -46,7 +46,14 @@ namespace CupheadOnline.Patches
     {
         static bool Prefix(PlayerDeathEffect __instance)
         {
-            return !ExtraParticipantReviveVisuals.HandleParrySwitch(__instance);
+            if (ExtraParticipantReviveVisuals.HandleParrySwitch(__instance))
+                return false;
+            return !ParticipantReviveController.TryPlayClientRemoteBuiltInParryVisualOnly(__instance);
+        }
+
+        static void Postfix(PlayerDeathEffect __instance)
+        {
+            ParticipantReviveController.NotifyBuiltInParrySwitch(__instance);
         }
     }
 
@@ -55,7 +62,9 @@ namespace CupheadOnline.Patches
     {
         static bool Prefix(PlayerDeathEffect __instance)
         {
-            return !ExtraParticipantReviveVisuals.HandleParryAnimComplete(__instance);
+            if (ExtraParticipantReviveVisuals.HandleParryAnimComplete(__instance))
+                return false;
+            return !ParticipantReviveController.TrySuppressClientRemoteBuiltInParryAnimComplete(__instance);
         }
     }
 

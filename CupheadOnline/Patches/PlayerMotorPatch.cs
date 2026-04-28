@@ -71,9 +71,7 @@ namespace CupheadOnline.Patches
                 Plugin.Net.SendPlayerState(ref pkt);
             else
             {
-                if (!Plugin.VanillaTwoPlayerOnline)
-                    SendInputFrameAndState(__instance, player, ref pkt);
-
+                SendInputFrameAndState(__instance, player, ref pkt);
                 if (MultiplayerSession.IsClient && MultiplayerSession.IsLocalPlayer(player.id))
                     ApplyAuthoritativeCorrection(__instance, player.id);
             }
@@ -143,6 +141,12 @@ namespace CupheadOnline.Patches
         static void ApplyRemoteState(LevelPlayerMotor motor, byte participantId)
         {
             var snapshot = RemotePlayer.GetNextSnapshot(participantId, mapState: false);
+            if (participantId <= (byte)PlayerId.PlayerTwo
+             && ParticipantReviveController.TrySuppressRemoteBuiltInDeadBody(motor.player))
+            {
+                return;
+            }
+
             if (!snapshot.HasValue)
                 return;
 
@@ -222,9 +226,9 @@ namespace CupheadOnline.Patches
             anim.SetBool("Shooting", shooting);
         }
 
-        static void ApplyRemoteAnimation(LevelPlayerController player, PlayerStatePacket snapshot)
+        internal static void ApplyRemoteAnimation(LevelPlayerController player, PlayerStatePacket snapshot)
         {
-            if (!Plugin.VanillaTwoPlayerOnline || snapshot.PlayerId > (byte)PlayerId.PlayerTwo)
+            if (snapshot.PlayerId > (byte)PlayerId.PlayerTwo)
                 return;
 
             var anim = player?.animationController?.animator;

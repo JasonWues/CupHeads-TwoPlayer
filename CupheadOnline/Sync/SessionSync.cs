@@ -53,6 +53,29 @@ namespace CupheadOnline.Sync
         private static int _localDeaths;
         private static int _localRetries;
         private static int _localParries;
+        private static readonly Dictionary<byte, BattleParticipantStats> _remoteBattleStats =
+            new Dictionary<byte, BattleParticipantStats>(4);
+        private static int _trackedBattleLevel = -1;
+        private static float _lastLocalBattleStatsSentAt = -1f;
+        private static int _lastSentBattleLevel = -1;
+        private static int _lastSentDeaths = -1;
+        private static int _lastSentParries = -1;
+        private static int _hostBattleLevel = -1;
+        private static float _hostBattleElapsedSeconds;
+        private static float _hostBattleSnapshotAt = -1f;
+        private static bool _hostBattlePaused;
+        private static int _hostBattleDeaths;
+        private static int _hostBattleRetries;
+        private static int _hostBattleParries;
+        private static float _lastBattleTimingLogAt = -1f;
+
+        private struct BattleParticipantStats
+        {
+            public int Level;
+            public int Deaths;
+            public int Parries;
+            public uint Tick;
+        }
 
         private static readonly BindingFlags InstanceAny =
             BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
@@ -90,6 +113,9 @@ namespace CupheadOnline.Sync
             if (!MultiplayerSession.IsActive || Plugin.Net == null || !Plugin.Net.IsConnected)
                 return;
 
+            TrackBattleStatsLevel();
+            MaybeSendLocalBattleStats(false);
+
             if (MultiplayerSession.IsHost)
             {
                 BroadcastPauseSnapshotIfChanged();
@@ -103,7 +129,7 @@ namespace CupheadOnline.Sync
                     }
 
                     BroadcastSessionSnapshot(true);
-                    _nextHostSnapshotAt = Time.unscaledTime + 1f;
+                    _nextHostSnapshotAt = Time.unscaledTime + (ShouldUseFastBattleSnapshotCadence() ? 0.2f : 1f);
                 }
             }
             else
@@ -237,6 +263,20 @@ namespace CupheadOnline.Sync
 
             _lastHostSnapshot = pkt;
             _lastHostSnapshotAt = Time.unscaledTime;
+            _hostBattleLevel = pkt.CurrentLevel;
+            _hostBattleElapsedSeconds = Mathf.Max(0f, pkt.BattleElapsedSeconds);
+            _hostBattleSnapshotAt = Time.unscaledTime;
+            _hostBattlePaused = pkt.IsPaused;
+            _hostBattleDeaths = pkt.BattleDeaths;
+            _hostBattleRetries = pkt.BattleRetries;
+            _hostBattleParries = pkt.BattleParries;
+            BattleAssistHud.SeedDiagnosticTimerFromHost(EstimateHostBattleElapsedSeconds(), pkt.CurrentLevel);
+            float localElapsedForCatchUp;
+            float hostElapsedForCatchUp;
+            float localMinusHostForCatchUp;
+            if (TryGetBattleAssistTiming(out localElapsedForCatchUp, out hostElapsedForCatchUp, out localMinusHostForCatchUp))
+                ParticipantReviveController.TryCatchUpAfterHostTimingSnapshot(localMinusHostForCatchUp);
+            LogBattleTimingOffset();
             if (pkt.SaveRevision != 0 && !IsStaleSaveRevision(pkt.SaveRevision))
                 _saveRevision = pkt.SaveRevision;
 
@@ -267,6 +307,61 @@ namespace CupheadOnline.Sync
                 return false;
 
             return unchecked((short)(revision - _saveRevision)) < 0;
+        }
+
+        public static bool TryGetBattleAssistDisplay(
+            out int deaths,
+            out int retries,
+            out int parries)
+        {
+            deaths = 0;
+            retries = 0;
+            parries = 0;
+
+            if (!MultiplayerSession.IsActive || !IsBattleActive())
+                return false;
+
+            int currentLevel = GetCurrentBattleLevel();
+            if (MultiplayerSession.IsHost)
+            {
+                deaths = GetAggregateBattleDeaths(currentLevel);
+                retries = _localRetries;
+                parries = GetAggregateBattleParries(currentLevel);
+                return true;
+            }
+
+            if (_hostBattleSnapshotAt < 0f || _hostBattleLevel != currentLevel)
+                return false;
+
+            deaths = _hostBattleDeaths;
+            retries = _hostBattleRetries;
+            parries = _hostBattleParries;
+            return true;
+        }
+
+        public static bool TryGetBattleAssistTiming(
+            out float localElapsedSeconds,
+            out float hostElapsedSeconds,
+            out float localMinusHostSeconds)
+        {
+            localElapsedSeconds = BattleAssistHud.ElapsedSeconds;
+            hostElapsedSeconds = localElapsedSeconds;
+            localMinusHostSeconds = 0f;
+
+            if (!MultiplayerSession.IsActive || !IsBattleActive())
+                return false;
+
+            if (MultiplayerSession.IsHost)
+                return true;
+
+            if (_hostBattleSnapshotAt < 0f || _hostBattleLevel != GetCurrentBattleLevel())
+                return false;
+            if (!BattleAssistHud.HasHostDiagnosticSeedForCurrentBattle)
+                return false;
+
+            hostElapsedSeconds = EstimateHostBattleElapsedSeconds();
+            localMinusHostSeconds = localElapsedSeconds - hostElapsedSeconds;
+            return true;
         }
 
         public static void ApplySessionSignal(SessionSignalPacket pkt)
@@ -397,6 +492,10 @@ namespace CupheadOnline.Sync
                 CurrentLevel = Level.Current != null ? (int)Level.Current.CurrentLevel : -1,
                 CurrentMapScene = PlayerData.Data != null ? (int)PlayerData.Data.CurrentMap : -1,
                 HostTick = MultiplayerSession.Tick,
+                BattleElapsedSeconds = BattleAssistHud.ElapsedSeconds,
+                BattleDeaths = ClampToUShort(GetAggregateBattleDeaths(GetCurrentBattleLevel())),
+                BattleRetries = ClampToUShort(_localRetries),
+                BattleParries = ClampToUShort(GetAggregateBattleParries(GetCurrentBattleLevel())),
                 SceneName = GetActiveSceneName(),
             };
 
@@ -527,19 +626,59 @@ namespace CupheadOnline.Sync
         public static void RecordLocalDeath()
         {
             if (!MultiplayerSession.IsActive) return;
+            TrackBattleStatsLevel();
             _localDeaths++;
+            MaybeSendLocalBattleStats(true);
         }
 
         public static void RecordLocalRetry()
         {
             if (!MultiplayerSession.IsActive) return;
+            TrackBattleStatsLevel();
             _localRetries++;
+            MaybeSendLocalBattleStats(true);
         }
 
         public static void RecordLocalParry()
         {
             if (!MultiplayerSession.IsActive) return;
+            TrackBattleStatsLevel();
             _localParries++;
+            MaybeSendLocalBattleStats(true);
+        }
+
+        public static void ApplyBattleAssistStats(BattleAssistStatsPacket pkt, byte sourceParticipantId)
+        {
+            if (!MultiplayerSession.IsActive || !MultiplayerSession.IsHost)
+                return;
+
+            int currentLevel = GetCurrentBattleLevel();
+            if (currentLevel < 0 || pkt.CurrentLevel != currentLevel)
+                return;
+
+            byte participantId = pkt.ParticipantId;
+            if (participantId == byte.MaxValue && sourceParticipantId != byte.MaxValue)
+                participantId = sourceParticipantId;
+            if (participantId == byte.MaxValue || participantId == (byte)MultiplayerSession.LocalId)
+                return;
+
+            BattleParticipantStats previous;
+            if (_remoteBattleStats.TryGetValue(participantId, out previous)
+             && previous.Level == pkt.CurrentLevel
+             && pkt.Tick != 0
+             && previous.Tick != 0
+             && NetTick.IsOlder(pkt.Tick, previous.Tick))
+            {
+                return;
+            }
+
+            _remoteBattleStats[participantId] = new BattleParticipantStats
+            {
+                Level = pkt.CurrentLevel,
+                Deaths = pkt.Deaths,
+                Parries = pkt.Parries,
+                Tick = pkt.Tick,
+            };
         }
 
         public static string GetFooterHint()
@@ -990,6 +1129,20 @@ namespace CupheadOnline.Sync
                 return;
             }
 
+            float localElapsed;
+            float hostElapsed;
+            float localMinusHost;
+            if (snapshot.IsInLevel
+             && TryGetBattleAssistTiming(out localElapsed, out hostElapsed, out localMinusHost)
+             && Mathf.Abs(localMinusHost) >= 0.25f)
+            {
+                _desyncSummary = "Battle timer drift detected (local-host="
+                    + FormatSignedSeconds(localMinusHost)
+                    + "s). Use REQUEST RESYNC.";
+                _desyncSeverity = SessionIssueSeverity.Warning;
+                return;
+            }
+
             uint localTick = MultiplayerSession.Tick;
             uint hostTick = snapshot.HostTick;
             uint tickDelta = localTick > hostTick ? localTick - hostTick : hostTick - localTick;
@@ -1038,13 +1191,198 @@ namespace CupheadOnline.Sync
             return _saveRevision;
         }
 
+        private static void TrackBattleStatsLevel()
+        {
+            int level = GetCurrentBattleLevel();
+            if (_trackedBattleLevel == level)
+                return;
+
+            _trackedBattleLevel = level;
+            _localDeaths = 0;
+            _localRetries = 0;
+            _localParries = 0;
+            _remoteBattleStats.Clear();
+            _lastLocalBattleStatsSentAt = -1f;
+            _lastSentBattleLevel = -1;
+            _lastSentDeaths = -1;
+            _lastSentParries = -1;
+            if (level < 0)
+            {
+                _hostBattleLevel = -1;
+                _hostBattleElapsedSeconds = 0f;
+                _hostBattleSnapshotAt = -1f;
+                _hostBattlePaused = false;
+                _hostBattleDeaths = 0;
+                _hostBattleRetries = 0;
+                _hostBattleParries = 0;
+                _lastBattleTimingLogAt = -1f;
+            }
+        }
+
+        private static void MaybeSendLocalBattleStats(bool force)
+        {
+            if (!MultiplayerSession.IsActive
+             || MultiplayerSession.IsHost
+             || Plugin.Net == null
+             || !Plugin.Net.IsConnected
+             || !IsBattleActive())
+            {
+                return;
+            }
+
+            int level = GetCurrentBattleLevel();
+            float now = Time.unscaledTime;
+            bool changed = level != _lastSentBattleLevel
+                        || _localDeaths != _lastSentDeaths
+                        || _localParries != _lastSentParries;
+            if (!force && !changed && _lastLocalBattleStatsSentAt > 0f && now - _lastLocalBattleStatsSentAt < 1f)
+                return;
+
+            var pkt = new BattleAssistStatsPacket
+            {
+                ParticipantId = (byte)MultiplayerSession.LocalId,
+                CurrentLevel = level,
+                Deaths = ClampToUShort(_localDeaths),
+                Parries = ClampToUShort(_localParries),
+                Tick = MultiplayerSession.Tick,
+            };
+
+            Plugin.Net.SendBattleAssistStats(ref pkt);
+            _lastLocalBattleStatsSentAt = now;
+            _lastSentBattleLevel = level;
+            _lastSentDeaths = _localDeaths;
+            _lastSentParries = _localParries;
+        }
+
+        private static int GetAggregateBattleDeaths(int level)
+        {
+            if (level < 0)
+                return 0;
+
+            int total = _localDeaths;
+            foreach (var entry in _remoteBattleStats.Values)
+                if (entry.Level == level)
+                    total += entry.Deaths;
+            return total;
+        }
+
+        private static int GetAggregateBattleParries(int level)
+        {
+            if (level < 0)
+                return 0;
+
+            int total = _localParries;
+            foreach (var entry in _remoteBattleStats.Values)
+                if (entry.Level == level)
+                    total += entry.Parries;
+            return total;
+        }
+
+        private static ushort ClampToUShort(int value)
+        {
+            if (value <= 0)
+                return 0;
+            if (value >= ushort.MaxValue)
+                return ushort.MaxValue;
+            return (ushort)value;
+        }
+
+        private static bool IsBattleActive()
+        {
+            try
+            {
+                return Level.Current != null && Level.Current.LevelType == Level.Type.Battle;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static int GetCurrentBattleLevel()
+        {
+            if (!IsBattleActive())
+                return -1;
+
+            try
+            {
+                return (int)Level.Current.CurrentLevel;
+            }
+            catch
+            {
+                return -1;
+            }
+        }
+
+        private static float EstimateHostBattleElapsedSeconds()
+        {
+            float hostElapsed = Mathf.Max(0f, _hostBattleElapsedSeconds);
+            if (!_hostBattlePaused && _hostBattleSnapshotAt >= 0f)
+                hostElapsed += Mathf.Max(0f, Time.unscaledTime - _hostBattleSnapshotAt);
+            return hostElapsed;
+        }
+
+        private static void LogBattleTimingOffset()
+        {
+            if (MultiplayerSession.IsHost || !IsBattleActive() || _hostBattleLevel != GetCurrentBattleLevel())
+                return;
+            if (!BattleAssistHud.HasHostDiagnosticSeedForCurrentBattle)
+                return;
+
+            float now = Time.unscaledTime;
+            if (_lastBattleTimingLogAt > 0f && now - _lastBattleTimingLogAt < 2f)
+                return;
+
+            float localElapsed = BattleAssistHud.ElapsedSeconds;
+            float hostElapsed = EstimateHostBattleElapsedSeconds();
+            float offset = localElapsed - hostElapsed;
+            string message = "[BattleAssist] Guest timer offset local-host="
+                + FormatSignedSeconds(offset)
+                + "s (local="
+                + localElapsed.ToString("0.0")
+                + "s, host="
+                + hostElapsed.ToString("0.0")
+                + "s).";
+
+            if (Mathf.Abs(offset) >= 0.25f)
+                Plugin.Log.LogWarning(message);
+            else
+                Plugin.Log.LogInfo(message);
+
+            _lastBattleTimingLogAt = now;
+        }
+
+        private static string FormatSignedSeconds(float value)
+        {
+            if (value > 0f)
+                return "+" + value.ToString("0.0");
+            return value.ToString("0.0");
+        }
+
         private static byte BuildSnapshotFlags()
         {
             byte flags = 0;
             if (_hasTrackedSave) flags |= 1;
             if (Level.Current != null) flags |= 2;
-            if (PauseManager.state == PauseManager.State.Paused) flags |= 4;
+            if (IsBattleTimerPaused()) flags |= 4;
             return flags;
+        }
+
+        private static bool ShouldUseFastBattleSnapshotCadence()
+        {
+            return IsBattleActive() && IsBattleTimerPaused();
+        }
+
+        private static bool IsBattleTimerPaused()
+        {
+            try
+            {
+                return PauseManager.state == PauseManager.State.Paused || CupheadTime.IsPaused();
+            }
+            catch
+            {
+                return PauseManager.state == PauseManager.State.Paused;
+            }
         }
 
         private static void TryAutoFollowHostSnapshot(SessionSnapshotPacket snapshot)
@@ -1205,6 +1543,7 @@ namespace CupheadOnline.Sync
             _localDeaths = 0;
             _localRetries = 0;
             _localParries = 0;
+            ResetBattleTracking();
             ResetPauseTracking();
         }
 
@@ -1237,7 +1576,26 @@ namespace CupheadOnline.Sync
             _localDeaths = 0;
             _localRetries = 0;
             _localParries = 0;
+            ResetBattleTracking();
             ResetPauseTracking();
+        }
+
+        private static void ResetBattleTracking()
+        {
+            _remoteBattleStats.Clear();
+            _trackedBattleLevel = -1;
+            _lastLocalBattleStatsSentAt = -1f;
+            _lastSentBattleLevel = -1;
+            _lastSentDeaths = -1;
+            _lastSentParries = -1;
+            _hostBattleLevel = -1;
+            _hostBattleElapsedSeconds = 0f;
+            _hostBattleSnapshotAt = -1f;
+            _hostBattlePaused = false;
+            _hostBattleDeaths = 0;
+            _hostBattleRetries = 0;
+            _hostBattleParries = 0;
+            _lastBattleTimingLogAt = -1f;
         }
 
         private static void ResetPauseTracking()

@@ -17,20 +17,65 @@ namespace CupheadOnline.UI
         private static readonly Color BodyColour = new Color(0.95f, 0.91f, 0.76f, 0.96f);
         private static readonly Color HintColour = new Color(0.72f, 0.70f, 0.62f, 0.92f);
         private static readonly Color BgColour = new Color(0.05f, 0.03f, 0.02f, 0.74f);
+        private const float HostDiagnosticReanchorThresholdSeconds = 0.075f;
 
         private static string _trackedLevel = string.Empty;
-        private static float _battleStartedAt = -1f;
+        private static string _hostSeededLevel = string.Empty;
+        private static float _lastTimerTickAt = -1f;
+        private static float _elapsedSeconds;
+        private static float _lastHostReanchorLogAt = -1f;
         private static int _deaths;
         private static int _retries;
         private static int _parries;
 
         private CanvasGroup _canvasGroup;
+        private RectTransform _panelRect;
         private Text _title;
         private Text _body;
         private Text _hint;
 
-        public static float ElapsedSeconds =>
-            _battleStartedAt < 0f ? 0f : Mathf.Max(0f, Time.unscaledTime - _battleStartedAt);
+        public static float ElapsedSeconds => Mathf.Max(0f, _elapsedSeconds);
+        public static bool HasHostDiagnosticSeedForCurrentBattle
+        {
+            get
+            {
+                if (MultiplayerSession.IsHost)
+                    return true;
+                if (!IsBattleActive() || Level.Current == null)
+                    return false;
+                string levelKey = Level.Current.CurrentLevel.ToString();
+                return string.Equals(_hostSeededLevel, levelKey, StringComparison.OrdinalIgnoreCase);
+            }
+        }
+
+        internal static bool TryGetPanelScreenRect(out Rect rect)
+        {
+            rect = new Rect();
+            if (Instance == null
+             || Instance._panelRect == null
+             || Instance._canvasGroup == null
+             || Instance._canvasGroup.alpha <= 0.01f)
+            {
+                return false;
+            }
+
+            var corners = new Vector3[4];
+            Instance._panelRect.GetWorldCorners(corners);
+            float minX = corners[0].x;
+            float minY = corners[0].y;
+            float maxX = corners[0].x;
+            float maxY = corners[0].y;
+            for (int i = 1; i < corners.Length; i++)
+            {
+                minX = Mathf.Min(minX, corners[i].x);
+                minY = Mathf.Min(minY, corners[i].y);
+                maxX = Mathf.Max(maxX, corners[i].x);
+                maxY = Mathf.Max(maxY, corners[i].y);
+            }
+
+            rect = Rect.MinMaxRect(minX, minY, maxX, maxY);
+            return rect.width > 1f && rect.height > 1f;
+        }
 
         public static void Tick()
         {
@@ -42,6 +87,7 @@ namespace CupheadOnline.UI
 
             Ensure();
             TrackCurrentBattle();
+            UpdateTimer();
             if (Instance != null)
                 Instance.Refresh();
         }
@@ -61,7 +107,30 @@ namespace CupheadOnline.UI
                 return;
 
             _retries++;
-            _battleStartedAt = Time.unscaledTime;
+            _elapsedSeconds = 0f;
+            _lastTimerTickAt = Time.unscaledTime;
+            _hostSeededLevel = string.Empty;
+        }
+
+        public static void SeedDiagnosticTimerFromHost(float hostElapsedSeconds, int hostLevel)
+        {
+            if (MultiplayerSession.IsHost || !IsBattleActive() || Level.Current == null)
+                return;
+            if ((int)Level.Current.CurrentLevel != hostLevel)
+                return;
+
+            string levelKey = Level.Current.CurrentLevel.ToString();
+            float hostElapsed = Mathf.Max(0f, hostElapsedSeconds);
+            if (string.Equals(_hostSeededLevel, levelKey, StringComparison.OrdinalIgnoreCase))
+            {
+                ReanchorDiagnosticTimerIfNeeded(hostElapsed);
+                return;
+            }
+
+            _trackedLevel = levelKey;
+            _hostSeededLevel = levelKey;
+            _elapsedSeconds = hostElapsed;
+            _lastTimerTickAt = Time.unscaledTime;
         }
 
         public static void RecordLocalParry(LevelPlayerController player)
@@ -76,7 +145,10 @@ namespace CupheadOnline.UI
         public static void Reset()
         {
             _trackedLevel = string.Empty;
-            _battleStartedAt = -1f;
+            _hostSeededLevel = string.Empty;
+            _lastTimerTickAt = -1f;
+            _elapsedSeconds = 0f;
+            _lastHostReanchorLogAt = -1f;
             _deaths = 0;
             _retries = 0;
             _parries = 0;
@@ -117,10 +189,11 @@ namespace CupheadOnline.UI
             var panel = new GameObject("BattleAssistPanel");
             panel.transform.SetParent(transform, false);
             var rt = panel.AddComponent<RectTransform>();
+            _panelRect = rt;
             rt.anchorMin = rt.anchorMax = new Vector2(0f, 1f);
             rt.pivot = new Vector2(0f, 1f);
             rt.anchoredPosition = new Vector2(18f, -18f);
-            rt.sizeDelta = new Vector2(330f, 92f);
+            rt.sizeDelta = new Vector2(330f, 112f);
 
             var bg = panel.AddComponent<Image>();
             bg.color = BgColour;
@@ -134,9 +207,9 @@ namespace CupheadOnline.UI
             _canvasGroup.alpha = 1f;
 
             _title = MakeText(panel, "BATTLE ASSIST", 13, TitleColour, new Vector2(14f, -12f), new Vector2(300f, 20f), TextAnchor.MiddleLeft);
-            _body = MakeText(panel, string.Empty, 12, BodyColour, new Vector2(14f, -42f), new Vector2(300f, 32f), TextAnchor.UpperLeft);
+            _body = MakeText(panel, string.Empty, 11, BodyColour, new Vector2(14f, -38f), new Vector2(302f, 54f), TextAnchor.UpperLeft);
             _body.horizontalOverflow = HorizontalWrapMode.Wrap;
-            _hint = MakeText(panel, "F6 RESYNC  F7 BARS  F9 COPY DIAG  F10 HIDE", 9, HintColour, new Vector2(14f, -76f), new Vector2(302f, 18f), TextAnchor.MiddleLeft);
+            _hint = MakeText(panel, "F6 RESYNC  F7 BARS  F9 COPY DIAG  F10 HIDE", 9, HintColour, new Vector2(14f, -96f), new Vector2(302f, 18f), TextAnchor.MiddleLeft);
         }
 
         private void OnDestroy()
@@ -156,11 +229,40 @@ namespace CupheadOnline.UI
             if (_title != null && _title.text != title)
                 _title.text = title;
 
-            string body = "TIME " + FormatTime(ElapsedSeconds)
-                + "   DEATHS " + _deaths
+            float localElapsed = ElapsedSeconds;
+            float hostElapsed;
+            float localMinusHost;
+            int displayDeaths = _deaths;
+            int displayRetries = _retries;
+            int displayParries = _parries;
+            int syncedDeaths;
+            int syncedRetries;
+            int syncedParries;
+            if (SessionSync.TryGetBattleAssistDisplay(
+                out syncedDeaths,
+                out syncedRetries,
+                out syncedParries))
+            {
+                displayDeaths = syncedDeaths;
+                displayRetries = syncedRetries;
+                displayParries = syncedParries;
+            }
+
+            string timeLine = "TIME " + FormatTime(localElapsed);
+            if (SessionSync.TryGetBattleAssistTiming(out localElapsed, out hostElapsed, out localMinusHost))
+            {
+                timeLine = MultiplayerSession.IsHost
+                    ? "TIME LOCAL/HOST " + FormatTime(localElapsed)
+                    : "TIME LOCAL " + FormatTime(localElapsed)
+                        + Environment.NewLine
+                        + "HOST " + FormatTime(hostElapsed) + "   OFFSET " + FormatSignedSeconds(localMinusHost) + "s";
+            }
+
+            string body = timeLine
                 + Environment.NewLine
-                + "RETRIES " + _retries
-                + "   PARRIES " + _parries;
+                + "DEATHS " + displayDeaths
+                + "   RETRIES " + displayRetries
+                + "   PARRIES " + displayParries;
 
             if (Plugin.BossHpScalingEnabled && BossHealthScaler.CurrentMultiplier > 1.0001f)
                 body += "   HP x" + BossHealthScaler.CurrentMultiplier.ToString("0.00");
@@ -182,10 +284,53 @@ namespace CupheadOnline.UI
                 return;
 
             _trackedLevel = levelKey;
-            _battleStartedAt = Time.unscaledTime;
+            _hostSeededLevel = string.Empty;
+            _lastTimerTickAt = Time.unscaledTime;
+            _elapsedSeconds = 0f;
             _deaths = 0;
             _retries = 0;
             _parries = 0;
+        }
+
+        private static void UpdateTimer()
+        {
+            float now = Time.unscaledTime;
+            if (_lastTimerTickAt < 0f)
+            {
+                _lastTimerTickAt = now;
+                return;
+            }
+
+            bool paused;
+            try { paused = PauseManager.state == PauseManager.State.Paused || CupheadTime.IsPaused(); }
+            catch { paused = PauseManager.state == PauseManager.State.Paused; }
+
+            // In online battles, short synchronized gameplay pauses can start on
+            // different frames locally. Let the diagnostic clock run through them
+            // and use host snapshots to correct real drift.
+            if (!paused || MultiplayerSession.IsActive)
+                _elapsedSeconds += Mathf.Max(0f, now - _lastTimerTickAt);
+
+            _lastTimerTickAt = now;
+        }
+
+        private static void ReanchorDiagnosticTimerIfNeeded(float hostElapsedSeconds)
+        {
+            float delta = hostElapsedSeconds - _elapsedSeconds;
+            if (Mathf.Abs(delta) < HostDiagnosticReanchorThresholdSeconds)
+                return;
+
+            _elapsedSeconds = Mathf.Max(0f, hostElapsedSeconds);
+            _lastTimerTickAt = Time.unscaledTime;
+
+            if (_lastHostReanchorLogAt < 0f || Time.unscaledTime - _lastHostReanchorLogAt > 1f)
+            {
+                Plugin.Log.LogInfo(
+                    "[BattleAssist] Re-anchored guest diagnostic timer to host after drift "
+                    + FormatSignedSeconds(-delta)
+                    + "s.");
+                _lastHostReanchorLogAt = Time.unscaledTime;
+            }
         }
 
         private static bool ShouldCountPlayer(LevelPlayerController player)
@@ -243,6 +388,13 @@ namespace CupheadOnline.UI
             int minutes = Mathf.FloorToInt(seconds / 60f);
             float remainder = seconds - minutes * 60f;
             return minutes.ToString("00") + ":" + remainder.ToString("00.0");
+        }
+
+        private static string FormatSignedSeconds(float seconds)
+        {
+            if (seconds > 0f)
+                return "+" + seconds.ToString("0.0");
+            return seconds.ToString("0.0");
         }
 
         private static string CleanLevelName(string value)

@@ -191,6 +191,22 @@ namespace CupheadOnline.Net
                     break;
                 }
 
+                case PacketType.ReviveVisual:
+                {
+                    var pkt = new ReviveVisualPacket();
+                    pkt.Read(r);
+                    ParticipantReviveController.ApplyReviveVisual(pkt);
+                    break;
+                }
+
+                case PacketType.BattleAssistStats:
+                {
+                    var pkt = new BattleAssistStatsPacket();
+                    pkt.Read(r);
+                    SessionSync.ApplyBattleAssistStats(pkt, sourceParticipantId);
+                    break;
+                }
+
                 case PacketType.MapDialogue:
                 {
                     var pkt = new MapDialoguePacket();
