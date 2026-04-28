@@ -4,6 +4,9 @@ param(
     [string]$TargetBossLevel = "",
     [switch]$SteamParityProfile,
     [switch]$UseLegacyClientLoadoutIds,
+    [int]$LanLatencyMs = 0,
+    [int]$LanJitterMs = 0,
+    [double]$LanUnreliableDropPercent = 0,
     [string]$HostRoot = "",
     [string]$ClientRoot = "",
     [string]$OutputRoot = ""
@@ -177,6 +180,9 @@ function Configure-TestCopies {
         Set-BepInExConfigValue $config "Debug" "AutoRunLanSteamE2E" "true"
         Set-BepInExConfigValue $config "Debug" "AutoRunLanSteamE2ETarget" $TargetBossLevel
         Set-BepInExConfigValue $config "Debug" "UseSeparateSavePath" "true"
+        Set-BepInExConfigValue $config "Debug" "LanArtificialLatencyMs" $LanLatencyMs
+        Set-BepInExConfigValue $config "Debug" "LanArtificialJitterMs" $LanJitterMs
+        Set-BepInExConfigValue $config "Debug" "LanUnreliableDropPercent" $LanUnreliableDropPercent
         Set-BepInExConfigValue $config "StartupSplash" "EnableStartupSplash" "false"
     }
 
@@ -570,10 +576,11 @@ while ((Get-Date) -lt $deadline) {
 
 $hostTextFinal = Read-Log $hostLog
 $clientTextFinal = Read-Log $clientLog
-$hostSummary = (($hostTextFinal -split "`r?`n") | Where-Object { $_ -match "Fight smoke complete|pause menu|resume|pause sync|PAUSE/RESUME|HOST PASS|FAIL" } | Select-Object -Last 12) -join "`n"
-$clientSummary = (($clientTextFinal -split "`r?`n") | Where-Object { $_ -match "Client host-checkpoint pause/resume sync complete|Client pause/resume sync complete|pause menu|resume|CLIENT PASS|FAIL|Received host fight checkpoint|Sanitized Player 1 loadout" } | Select-Object -Last 12) -join "`n"
+$hostSummary = (($hostTextFinal -split "`r?`n") | Where-Object { $_ -match "Guest-only shooting smoke|Fight smoke complete|pause menu|resume|pause sync|PAUSE/RESUME|HOST PASS|FAIL" } | Select-Object -Last 16) -join "`n"
+$clientSummary = (($clientTextFinal -split "`r?`n") | Where-Object { $_ -match "Client host-checkpoint pause/resume sync complete|Client pause/resume sync complete|pause menu|resume|CLIENT PASS|FAIL|Received host fight checkpoint|Sanitized Player 1 loadout|Simulation drift detected|Host snapshots stalled" } | Select-Object -Last 16) -join "`n"
 $legacyLoadoutFixtureExercised = $false
 $steamParityFailure = ""
+$syncHealthFailure = ""
 if ($UseLegacyClientLoadoutIds) {
     $legacyLoadoutFixtureExercised =
         ($clientTextFinal -match "W1=9->") -or
@@ -584,6 +591,18 @@ if ($UseLegacyClientLoadoutIds) {
         $failed = $true
         $steamParityFailure = "Steam parity profile did not exercise the legacy client loadout fixture."
     }
+}
+
+$syncHealthIssues = @()
+if ($clientTextFinal -match "Simulation drift detected") {
+    $syncHealthIssues += "Client reported simulation drift."
+}
+if ($clientTextFinal -match "Host snapshots stalled") {
+    $syncHealthIssues += "Client reported stalled host snapshots."
+}
+if ($syncHealthIssues.Count -gt 0) {
+    $failed = $true
+    $syncHealthFailure = ($syncHealthIssues -join " ")
 }
 
 $bossFrames = @($metrics | Where-Object { $_.BossBarVisible })
@@ -609,9 +628,13 @@ $report = [pscustomobject]@{
     ClientPass = $clientPass
     Failed = $failed
     SteamParityProfile = [bool]$SteamParityProfile
+    LanLatencyMs = $LanLatencyMs
+    LanJitterMs = $LanJitterMs
+    LanUnreliableDropPercent = $LanUnreliableDropPercent
     LegacyClientLoadoutIds = [bool]$UseLegacyClientLoadoutIds
     LegacyLoadoutFixtureExercised = [bool]$legacyLoadoutFixtureExercised
     SteamParityFailure = $steamParityFailure
+    SyncHealthFailure = $syncHealthFailure
     VideoPath = $videoPath
     FramesDirectory = $framesDir
     BossVisibleFrameCount = $bossFrames.Count

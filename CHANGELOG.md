@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.2.43 - 2026-04-28
+
+- Made remote input buffering latency-aware so high-Steam-relay guests no longer time out after only a few fixed frames, fixing cases where the guest showed shooting/jumping locally but the host never spawned the remote bullets or movement.
+- Blocked stale built-in player death/revive status while the guest is waiting on host level-start release, preventing old-scene revive packets from creating duplicate or wonky guest-side Player One/Player Two bodies.
+- Suppressed the misleading raw tick-drift warning for vanilla two-player sessions, where host and guest simulation tick counters are not directly comparable even when the battle clocks and player snapshots are healthy.
+- Expanded the LAN/Steam verifier with configurable artificial latency, jitter, and unreliable packet loss, plus a P2-only shooting smoke test, built-in player uniqueness checks, and sync-health log failures so the automated tests better match real guest-side reports.
+
 ## v1.2.42 - 2026-04-28
 
 - Fixed the reverse built-in revive verifier failure from v1.2.41 by accepting and mirroring the host's authoritative Player One revive status even when Cuphead restores Player One with more than 1 HP.

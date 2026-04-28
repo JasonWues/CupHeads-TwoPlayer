@@ -551,9 +551,13 @@ namespace CupheadOnline.Net
         readonly CSteamID _lanClientPeerId = new CSteamID(LAN_CLIENT_STEAM_ID);
         readonly Queue<LanRawPacket> _lanRecvQueue = new Queue<LanRawPacket>();
         readonly object _lanRecvLock = new object();
+        readonly List<DelayedLanSend> _lanDelayedSends = new List<DelayedLanSend>(256);
+        readonly object _lanDelayedSendLock = new object();
         UdpClient _lanUdp;
         Thread _lanRecvThread;
+        Thread _lanDelayedSendThread;
         volatile bool _lanRecvRunning;
+        volatile bool _lanDelayedSendRunning;
         bool _lanActive;
         bool _lanStartedAsHost;
         float _lanNextHelloRetryTime;
@@ -561,11 +565,20 @@ namespace CupheadOnline.Net
         IPEndPoint _lanPeerEndpoint;
         int _lanPort;
         string _lanHostAddress;
+        readonly object _lanImpairmentRandomLock = new object();
+        readonly System.Random _lanImpairmentRandom = new System.Random();
 
         struct LanRawPacket
         {
             public byte[] Data;
             public IPEndPoint From;
+        }
+
+        sealed class DelayedLanSend
+        {
+            public byte[] Data;
+            public IPEndPoint Endpoint;
+            public DateTime DueUtc;
         }
 
         // ── Constructor ───────────────────────────────────────────────────────
@@ -612,6 +625,7 @@ namespace CupheadOnline.Net
                 _lanRecvRunning = true;
                 _lanRecvThread = new Thread(LanReceiveLoop) { IsBackground = true, Name = "CupHeadsLanRecv" };
                 _lanRecvThread.Start();
+                StartLanDelayedSendWorker();
                 MultiplayerSession.StartAsHost();
                 SetState(NetState.WaitingInLobby, "LAN host listening on " + BuildLanAddress() + ".\nWaiting for LAN client...");
                 Plugin.Log.LogInfo("[SteamNet][LAN] Host listening on UDP :" + port + ".");
@@ -665,6 +679,7 @@ namespace CupheadOnline.Net
                 _lanRecvRunning = true;
                 _lanRecvThread = new Thread(LanReceiveLoop) { IsBackground = true, Name = "CupHeadsLanRecv" };
                 _lanRecvThread.Start();
+                StartLanDelayedSendWorker();
 
                 SetState(NetState.WaitingWelcome, "Connecting to LAN host " + _lanHostAddress + ":" + port + "...");
                 _lanNextHelloRetryTime = Time.realtimeSinceStartup + 0.75f;
@@ -1842,16 +1857,171 @@ namespace CupheadOnline.Net
             if (endpoint == null)
                 return;
 
+            if (ShouldDropLanPacket(data, reliable))
+                return;
+
+            int delayMs = ComputeLanArtificialDelayMs();
+            if (delayMs > 0)
+            {
+                var copy = new byte[data.Length];
+                Buffer.BlockCopy(data, 0, copy, 0, data.Length);
+                var delayed = new DelayedLanSend
+                {
+                    Data = copy,
+                    Endpoint = new IPEndPoint(endpoint.Address, endpoint.Port),
+                    DueUtc = DateTime.UtcNow.AddMilliseconds(delayMs),
+                };
+                EnqueueDelayedLanPacket(delayed);
+                return;
+            }
+
+            SendLanPacketNow(data, endpoint);
+        }
+
+        bool ShouldDropLanPacket(byte[] data, bool reliable)
+        {
+            if (reliable)
+                return false;
+
+            float dropPercent = Plugin.LanUnreliableDropPercent;
+            if (dropPercent <= 0f)
+                return false;
+
+            double roll;
+            lock (_lanImpairmentRandomLock)
+                roll = _lanImpairmentRandom.NextDouble() * 100.0;
+
+            if (roll >= dropPercent)
+                return false;
+
+            Plugin.LogVerbose("[SteamNet][LAN] Dropped unreliable " + DescribePacketType(data) + " for impairment test.");
+            return true;
+        }
+
+        int ComputeLanArtificialDelayMs()
+        {
+            int baseDelay = Plugin.LanArtificialLatencyMs;
+            int jitter = Plugin.LanArtificialJitterMs;
+            int offset = 0;
+            if (jitter > 0)
+            {
+                lock (_lanImpairmentRandomLock)
+                    offset = _lanImpairmentRandom.Next(-jitter, jitter + 1);
+            }
+
+            return Math.Max(0, baseDelay + offset);
+        }
+
+        void SendLanPacketNow(byte[] data, IPEndPoint endpoint)
+        {
+            if (_lanUdp == null || !_lanActive || data == null || data.Length == 0 || endpoint == null)
+                return;
+
             try
             {
                 _lanUdp.Send(data, data.Length, endpoint);
-                Plugin.LogVerbose("[SteamNet][LAN] Sent " + ((PacketType)data[0]) + " to " + endpoint + " reliable=" + reliable + ".");
+                Plugin.LogVerbose("[SteamNet][LAN] Sent " + DescribePacketType(data) + " to " + endpoint + ".");
             }
             catch (Exception ex)
             {
                 if (_lanActive)
                     Plugin.Log.LogWarning("[SteamNet][LAN] Send failed: " + ex.Message);
             }
+        }
+
+        string DescribePacketType(byte[] data)
+        {
+            if (data == null || data.Length == 0)
+                return "(empty)";
+
+            byte type = data[0];
+            return Enum.IsDefined(typeof(PacketType), type)
+                ? ((PacketType)type).ToString()
+                : "0x" + type.ToString("X2");
+        }
+
+        void StartLanDelayedSendWorker()
+        {
+            lock (_lanDelayedSendLock)
+            {
+                _lanDelayedSends.Clear();
+                _lanDelayedSendRunning = true;
+                _lanDelayedSendThread = new Thread(LanDelayedSendLoop)
+                {
+                    IsBackground = true,
+                    Name = "CupHeadsLanSendDelay",
+                };
+                _lanDelayedSendThread.Start();
+            }
+        }
+
+        void EnqueueDelayedLanPacket(DelayedLanSend delayed)
+        {
+            if (delayed == null)
+                return;
+
+            lock (_lanDelayedSendLock)
+            {
+                if (!_lanDelayedSendRunning)
+                    return;
+
+                _lanDelayedSends.Add(delayed);
+                Monitor.PulseAll(_lanDelayedSendLock);
+            }
+        }
+
+        void LanDelayedSendLoop()
+        {
+            while (true)
+            {
+                DelayedLanSend next = null;
+                lock (_lanDelayedSendLock)
+                {
+                    while (_lanDelayedSendRunning && _lanDelayedSends.Count == 0)
+                        Monitor.Wait(_lanDelayedSendLock, 100);
+
+                    if (!_lanDelayedSendRunning)
+                        break;
+
+                    int index = FindNextDelayedSendIndex();
+                    if (index < 0)
+                        continue;
+
+                    DateTime now = DateTime.UtcNow;
+                    TimeSpan wait = _lanDelayedSends[index].DueUtc - now;
+                    if (wait.TotalMilliseconds > 1.0)
+                    {
+                        int waitMs = (int)Math.Min(100.0, Math.Max(1.0, wait.TotalMilliseconds));
+                        Monitor.Wait(_lanDelayedSendLock, waitMs);
+                        continue;
+                    }
+
+                    next = _lanDelayedSends[index];
+                    _lanDelayedSends.RemoveAt(index);
+                }
+
+                if (next != null)
+                    SendLanPacketNow(next.Data, next.Endpoint);
+            }
+        }
+
+        int FindNextDelayedSendIndex()
+        {
+            if (_lanDelayedSends.Count == 0)
+                return -1;
+
+            int index = 0;
+            DateTime due = _lanDelayedSends[0].DueUtc;
+            for (int i = 1; i < _lanDelayedSends.Count; i++)
+            {
+                if (_lanDelayedSends[i].DueUtc >= due)
+                    continue;
+
+                index = i;
+                due = _lanDelayedSends[i].DueUtc;
+            }
+
+            return index;
         }
 
         void LanReceiveLoop()
@@ -1953,13 +2123,25 @@ namespace CupheadOnline.Net
         void ShutdownLanTransport()
         {
             _lanRecvRunning = false;
+            _lanDelayedSendRunning = false;
             _lanActive = false;
+            Thread delayedSendThread = _lanDelayedSendThread;
+            lock (_lanDelayedSendLock)
+            {
+                _lanDelayedSends.Clear();
+                Monitor.PulseAll(_lanDelayedSendLock);
+            }
+            if (delayedSendThread != null && delayedSendThread != Thread.CurrentThread)
+            {
+                try { delayedSendThread.Join(200); } catch { }
+            }
             if (_lanUdp != null)
             {
                 try { _lanUdp.Close(); } catch { }
                 _lanUdp = null;
             }
             _lanRecvThread = null;
+            _lanDelayedSendThread = null;
             _lanHostEndpoint = null;
             _lanPeerEndpoint = null;
             _lanStartedAsHost = false;

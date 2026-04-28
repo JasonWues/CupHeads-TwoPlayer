@@ -44,6 +44,8 @@ namespace CupheadOnline.Sync
         {
             if (ShouldIgnoreRemoteBuiltInStatus(pkt, fromRemote))
                 return;
+            if (ShouldIgnoreRemoteBuiltInStatusDuringClientLevelStart(pkt, fromRemote))
+                return;
 
             ParticipantStatus existing;
             bool hasExisting = _statuses.TryGetValue(pkt.ParticipantId, out existing);
@@ -89,6 +91,31 @@ namespace CupheadOnline.Sync
             return fromRemote
                 && MultiplayerSession.IsHost
                 && pkt.ParticipantId <= (byte)PlayerId.PlayerTwo;
+        }
+
+        static bool ShouldIgnoreRemoteBuiltInStatusDuringClientLevelStart(PlayerStatusPacket pkt, bool fromRemote)
+        {
+            if (!fromRemote
+             || !MultiplayerSession.IsClient
+             || pkt.ParticipantId > (byte)PlayerId.PlayerTwo
+             || !LevelStartSync.IsClientWaitingForStartRelease)
+            {
+                return false;
+            }
+
+            Plugin.Log.LogInfo(
+                "[StatusSync] Ignored built-in status for "
+                + (PlayerId)pkt.ParticipantId
+                + " during client level-start gate: hp="
+                + pkt.Health
+                + "/"
+                + pkt.HealthMax
+                + " dead="
+                + pkt.IsDead
+                + " tick="
+                + pkt.Tick
+                + ".");
+            return true;
         }
 
         static bool ShouldIgnoreRemoteAliveStatusWhileLocallyDead(

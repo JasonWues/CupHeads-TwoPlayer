@@ -1146,7 +1146,7 @@ namespace CupheadOnline.Sync
             uint localTick = MultiplayerSession.Tick;
             uint hostTick = snapshot.HostTick;
             uint tickDelta = localTick > hostTick ? localTick - hostTick : hostTick - localTick;
-            if (snapshot.IsInLevel && tickDelta > 240)
+            if (!Plugin.VanillaTwoPlayerOnline && snapshot.IsInLevel && tickDelta > 240)
             {
                 _desyncSummary = "Simulation drift detected (" + tickDelta + " ticks). Use REQUEST RESYNC.";
                 _desyncSeverity = SessionIssueSeverity.Warning;

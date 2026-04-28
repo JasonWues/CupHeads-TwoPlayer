@@ -25,7 +25,8 @@ namespace CupheadOnline.Sync
             public readonly int[] UpServedFrames = CreateServedFrameBuffer();
         }
 
-        const int MAX_STALL = 12; // ~200 ms at 60 Hz before inputs are released
+        const int MinStallFrames = 18; // ~300 ms at 60 Hz before inputs are released on low-latency links.
+        const int MaxStallFrames = 90; // Keep stale controls bounded even on poor Steam relay routes.
 
         static readonly Dictionary<byte, RemoteInputState> _states =
             new Dictionary<byte, RemoteInputState>(2);
@@ -134,7 +135,7 @@ namespace CupheadOnline.Sync
                 return;
 
             state.StallFrames++;
-            if (state.StallFrames > MAX_STALL)
+            if (state.StallFrames > ComputeMaxStallFrames())
             {
                 // Starvation: zero all inputs so the proxy player stops moving.
                 state.Previous = state.Current;
@@ -176,6 +177,25 @@ namespace CupheadOnline.Sync
                 _states[participantId] = state;
             }
             return state;
+        }
+
+        static int ComputeMaxStallFrames()
+        {
+            int latencyMs = 0;
+            try
+            {
+                if (Plugin.Net != null)
+                    latencyMs = Plugin.Net.Latency;
+            }
+            catch
+            {
+                latencyMs = 0;
+            }
+
+            float fixedStep = Time.fixedDeltaTime > 0.001f ? Time.fixedDeltaTime : (1f / 60f);
+            float toleratedSeconds = Mathf.Max(0.30f, 0.30f + (Mathf.Max(0, latencyMs) / 1000f) * 1.25f);
+            int frames = Mathf.CeilToInt(toleratedSeconds / fixedStep);
+            return Mathf.Clamp(frames, MinStallFrames, MaxStallFrames);
         }
 
         static void RecomputeEdges(RemoteInputState state)

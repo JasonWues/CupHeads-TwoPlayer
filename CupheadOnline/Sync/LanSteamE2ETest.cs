@@ -41,6 +41,7 @@ namespace CupheadOnline.Sync
         const float CardTimeout = 10f;
         const float LevelTimeout = 30f;
         const float FightDuration = 16f;
+        const float GuestOnlyDamageDuration = 4f;
         const float DialogueTimeout = 10f;
         const float PauseTimeout = 8f;
         const float ReviveSmokeTimeout = 12f;
@@ -162,6 +163,12 @@ namespace CupheadOnline.Sync
         static bool _hostSawP1Shooting;
         static bool _hostSawP2Shooting;
         static bool _clientSawP2Shooting;
+        static bool _guestOnlyDamageStarted;
+        static bool _guestOnlyDamageVerified;
+        static float _guestOnlyDamageStartedAt;
+        static string _guestOnlyBossName = string.Empty;
+        static float _guestOnlyStartBossHealth;
+        static float _guestOnlyStartBossTotal;
         static Vector2 _hostAxis;
         static uint _hostButtons;
         static uint _hostDownButtons;
@@ -783,6 +790,9 @@ namespace CupheadOnline.Sync
                 return;
             }
 
+            if (!ValidateBuiltInPlayerUniqueness("host level start"))
+                return;
+
             CaptureScreen("host_level_" + sceneName);
             _hasFightStartBossHealth = BossHealthBarOverlay.TryGetPrimaryBossHealth(
                 out _fightStartBossName,
@@ -806,6 +816,9 @@ namespace CupheadOnline.Sync
                 return;
 
             if (!RunHostReverseBuiltInReviveSmoke())
+                return;
+
+            if (!RunGuestOnlyShootingSmoke())
                 return;
 
             KeepScriptedPlayersAlive();
@@ -1061,6 +1074,9 @@ namespace CupheadOnline.Sync
             if (p1 == null || p2 == null || p1.stats == null || p2.stats == null)
                 return;
 
+            if (!ValidateBuiltInPlayerUniqueness("client level observe"))
+                return;
+
             KeepScriptedPlayersAlive(p1, p2);
 
             if (!_clientLevelReached)
@@ -1226,6 +1242,100 @@ namespace CupheadOnline.Sync
             _clientSawP2Shooting = _clientSawP2Shooting || IsPlayerShooting(p2);
         }
 
+        static bool RunGuestOnlyShootingSmoke()
+        {
+            if (_guestOnlyDamageVerified)
+                return true;
+
+            var p1 = PlayerManager.GetPlayer(PlayerId.PlayerOne) as LevelPlayerController;
+            var p2 = PlayerManager.GetPlayer(PlayerId.PlayerTwo) as LevelPlayerController;
+            if (p1 == null || p2 == null || p1.stats == null || p2.stats == null)
+            {
+                Fail("Cannot run guest-only shooting smoke because a built-in player is missing.");
+                return false;
+            }
+
+            if (!ValidateBuiltInPlayerUniqueness("host guest-only shooting"))
+                return false;
+
+            KeepScriptedPlayersAlive(p1, p2);
+            CheckRemoteInput();
+            TrackHostShootingState(null, p2);
+            _hostButtons &= ~ButtonMask(CupheadButton.Shoot);
+
+            string bossName;
+            float bossHealth;
+            float bossTotal;
+            bool hasBossHealth = BossHealthBarOverlay.TryGetPrimaryBossHealth(
+                out bossName,
+                out bossHealth,
+                out bossTotal);
+            if (!hasBossHealth)
+            {
+                if (Time.unscaledTime - _stageStartedAt > 6f)
+                    Fail("Could not read boss health for the guest-only shooting smoke.");
+                return false;
+            }
+
+            if (!_guestOnlyDamageStarted)
+            {
+                _guestOnlyDamageStarted = true;
+                _guestOnlyDamageStartedAt = Time.unscaledTime;
+                _guestOnlyBossName = bossName;
+                _guestOnlyStartBossHealth = bossHealth;
+                _guestOnlyStartBossTotal = bossTotal;
+                Log("Guest-only shooting smoke started: boss="
+                    + bossName
+                    + " "
+                    + bossHealth.ToString("0.##")
+                    + "/"
+                    + bossTotal.ToString("0.##")
+                    + ".");
+                return false;
+            }
+
+            if (Time.unscaledTime - _guestOnlyDamageStartedAt < GuestOnlyDamageDuration)
+                return false;
+
+            if (!_sawRemoteInput)
+            {
+                Fail("Host did not observe client input frames during the guest-only shooting smoke.");
+                return false;
+            }
+
+            if (!_hostSawP2Shooting)
+            {
+                Fail("Host did not observe Player Two shooting during the guest-only shooting smoke.");
+                return false;
+            }
+
+            if (bossName == _guestOnlyBossName
+             && bossHealth >= _guestOnlyStartBossHealth - 0.5f)
+            {
+                Fail("Guest Player Two shooting did not damage the boss: start="
+                    + _guestOnlyStartBossHealth.ToString("0.##")
+                    + "/"
+                    + _guestOnlyStartBossTotal.ToString("0.##")
+                    + ", end="
+                    + bossHealth.ToString("0.##")
+                    + "/"
+                    + bossTotal.ToString("0.##")
+                    + ".");
+                return false;
+            }
+
+            _guestOnlyDamageVerified = true;
+            _stageStartedAt = Time.unscaledTime;
+            Log("Guest-only shooting smoke passed: boss="
+                + bossName
+                + " "
+                + bossHealth.ToString("0.##")
+                + "/"
+                + bossTotal.ToString("0.##")
+                + ".");
+            return true;
+        }
+
         static bool IsPlayerShooting(LevelPlayerController player)
         {
             try
@@ -1238,6 +1348,48 @@ namespace CupheadOnline.Sync
             {
                 return false;
             }
+        }
+
+        static bool ValidateBuiltInPlayerUniqueness(string context)
+        {
+            var players = Resources.FindObjectsOfTypeAll<LevelPlayerController>();
+            int p1Count = 0;
+            int p2Count = 0;
+            string details = string.Empty;
+
+            for (int i = 0; i < players.Length; i++)
+            {
+                var player = players[i];
+                if (player == null)
+                    continue;
+                if (player.gameObject == null || !player.gameObject.scene.IsValid())
+                    continue;
+
+                if (player.id == PlayerId.PlayerOne)
+                    p1Count++;
+                else if (player.id == PlayerId.PlayerTwo)
+                    p2Count++;
+                else
+                    continue;
+
+                if (details.Length > 0)
+                    details += " | ";
+                details += player.id + ":" + player.name + " active=" + player.gameObject.activeInHierarchy;
+            }
+
+            if (p1Count == 1 && p2Count == 1)
+                return true;
+
+            Fail("Duplicate or missing built-in players during "
+                + context
+                + ": P1 count="
+                + p1Count
+                + " P2 count="
+                + p2Count
+                + " ["
+                + details
+                + "].");
+            return false;
         }
 
         static bool IsLevelPauseMenuOpen()
@@ -2310,6 +2462,12 @@ namespace CupheadOnline.Sync
                 _hostSawP1Shooting = false;
                 _hostSawP2Shooting = false;
                 _clientSawP2Shooting = false;
+                _guestOnlyDamageStarted = false;
+                _guestOnlyDamageVerified = false;
+                _guestOnlyDamageStartedAt = 0f;
+                _guestOnlyBossName = string.Empty;
+                _guestOnlyStartBossHealth = 0f;
+                _guestOnlyStartBossTotal = 0f;
             }
             ResetScriptedInput();
             Log(message);

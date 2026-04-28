@@ -50,6 +50,9 @@ namespace CupheadOnline
         static ConfigEntry<string> _cfgAutoRunLanSteamE2ETarget;
         static ConfigEntry<bool> _cfgUseSeparateSavePath;
         static ConfigEntry<string> _cfgSeparateSavePath;
+        static ConfigEntry<int> _cfgLanArtificialLatencyMs;
+        static ConfigEntry<int> _cfgLanArtificialJitterMs;
+        static ConfigEntry<float> _cfgLanUnreliableDropPercent;
         static ConfigEntry<bool> _cfgEnableStartupSplash;
         static ConfigEntry<bool> _cfgStartupSplashAllowSkip;
         static ConfigEntry<bool> _cfgStartupSplashStaticOverlay;
@@ -92,6 +95,9 @@ namespace CupheadOnline
                 return Path.Combine(Path.Combine(Paths.BepInExRootPath, "CupHeads"), "Saves");
             }
         }
+        public static int LanArtificialLatencyMs => _cfgLanArtificialLatencyMs == null ? 0 : Mathf.Max(0, _cfgLanArtificialLatencyMs.Value);
+        public static int LanArtificialJitterMs => _cfgLanArtificialJitterMs == null ? 0 : Mathf.Max(0, _cfgLanArtificialJitterMs.Value);
+        public static float LanUnreliableDropPercent => _cfgLanUnreliableDropPercent == null ? 0f : Mathf.Clamp(_cfgLanUnreliableDropPercent.Value, 0f, 100f);
         public static bool EnableStartupSplash => _cfgEnableStartupSplash == null || _cfgEnableStartupSplash.Value;
         public static bool StartupSplashAllowSkip => _cfgStartupSplashAllowSkip == null || _cfgStartupSplashAllowSkip.Value;
         public static bool StartupSplashStaticOverlay => _cfgStartupSplashStaticOverlay != null && _cfgStartupSplashStaticOverlay.Value;
@@ -161,6 +167,12 @@ namespace CupheadOnline
                 "Redirect Cuphead save files to a separate folder. Use this only for test copies so normal saves are not touched.");
             _cfgSeparateSavePath = Config.Bind("Debug", "SeparateSavePath", "",
                 "Optional absolute folder for redirected Cuphead save files. Empty means BepInEx/CupHeads/Saves.");
+            _cfgLanArtificialLatencyMs = Config.Bind("Debug", "LanArtificialLatencyMs", 0,
+                "Dev-only one-way packet delay for LAN Steam-emulation tests. Use this to reproduce Steam relay latency.");
+            _cfgLanArtificialJitterMs = Config.Bind("Debug", "LanArtificialJitterMs", 0,
+                "Dev-only random +/- packet delay jitter for LAN Steam-emulation tests.");
+            _cfgLanUnreliableDropPercent = Config.Bind("Debug", "LanUnreliableDropPercent", 0f,
+                "Dev-only packet loss percentage for unreliable LAN Steam-emulation packets. Reliable packets are delayed but not dropped.");
             _cfgEnableStartupSplash = Config.Bind("StartupSplash", "EnableStartupSplash", true,
                 "Play BepInEx/plugins/CupheadOnline/Assets/CupHeadsIntro.mp4 over the game's startup/title intro.");
             _cfgStartupSplashAllowSkip = Config.Bind("StartupSplash", "AllowSkip", true,
@@ -528,6 +540,6 @@ namespace CupheadOnline
     {
         public const string GUID    = "com.cupheadonline.mod";
         public const string NAME    = "CupHeads";
-        public const string VERSION = "1.2.42";
+        public const string VERSION = "1.2.43";
     }
 }
