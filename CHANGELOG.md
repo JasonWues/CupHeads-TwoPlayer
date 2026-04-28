@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.2.41 - 2026-04-28
+
+- Re-anchored the guest battle timer to host snapshots during battle pauses and revive timing checks, keeping the diagnostic clocks aligned while still showing guest-vs-host offset.
+- Added host-sent death-heart parry visuals and guarded remote built-in death bodies so the guest no longer shows duplicate Player One sprites during the P1-dead/P2-revive path.
+- Broadcast battle-assist stats and revive visual packets over the same LAN/Steam packet path used by the verifier so both revive directions stay inspectable on host and guest.
+
 ## v1.2.40 - 2026-04-27
 
 - Mirrored host-observed built-in revives for both built-in player slots on the guest, covering the reverse case where Player One dies and Player Two revives them.
