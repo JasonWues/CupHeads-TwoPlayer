@@ -47,12 +47,16 @@ namespace CupheadOnline.Sync
 
             ParticipantStatus existing;
             bool hasExisting = _statuses.TryGetValue(pkt.ParticipantId, out existing);
-            if (ShouldIgnoreRemoteAliveStatusWhileLocallyDead(existing, pkt, fromRemote, hasExisting))
+            bool acceptHostBuiltInRevive = hasExisting && ShouldAcceptRemoteHostBuiltInRevive(existing, pkt, fromRemote);
+            if (!acceptHostBuiltInRevive
+             && ShouldIgnoreRemoteAliveStatusWhileLocallyDead(existing, pkt, fromRemote, hasExisting))
+            {
                 return;
+            }
 
             if (hasExisting
              && NetTick.IsOlder(pkt.Tick, existing.Tick)
-             && !ShouldAcceptRemoteHostBuiltInRevive(existing, pkt, fromRemote))
+             && !acceptHostBuiltInRevive)
             {
                 return;
             }
@@ -131,8 +135,6 @@ namespace CupheadOnline.Sync
 
             bool remoteSaysRevived = !pkt.IsDead && pkt.Health > 0;
             if (!existing.IsDead || !remoteSaysRevived)
-                return false;
-            if (pkt.Health > 1)
                 return false;
 
             Plugin.Log.LogInfo(

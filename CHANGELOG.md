@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.2.42 - 2026-04-28
+
+- Fixed the reverse built-in revive verifier failure from v1.2.41 by accepting and mirroring the host's authoritative Player One revive status even when Cuphead restores Player One with more than 1 HP.
+- Kept the stale-alive suppression for pending death-heart revives, but no longer lets that suppression block the actual host-authorized revive packet or the revive-controller mirror path.
+
 ## v1.2.41 - 2026-04-28
 
 - Re-anchored the guest battle timer to host snapshots during battle pauses and revive timing checks, keeping the diagnostic clocks aligned while still showing guest-vs-host offset.

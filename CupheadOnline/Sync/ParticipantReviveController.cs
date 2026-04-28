@@ -526,8 +526,6 @@ namespace CupheadOnline.Sync
                 return false;
             if (pkt.IsDead || pkt.Health <= 0)
                 return false;
-            if (pkt.Health > 1)
-                return false;
 
             var playerId = (PlayerId)pkt.ParticipantId;
             if (MultiplayerSession.IsAuthoritativePlayer(playerId)
