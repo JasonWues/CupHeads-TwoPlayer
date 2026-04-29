@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 using HarmonyLib;
 using UnityEngine;
@@ -160,6 +161,7 @@ namespace CupheadOnline.Patches
                 AxisY = axisY,
                 Buttons = buttons,
                 Tick = NextInputTick(),
+                InputTime = HighLatencyInputSync.PacketTimeNow(),
             };
         }
 
@@ -275,6 +277,16 @@ namespace CupheadOnline.Patches
 
     internal static class ClientInputFramePump
     {
+        const int HighLatencyInputHistoryFrames = 5;
+        static readonly Queue<InputFramePacket> _recentHighLatencyInputs =
+            new Queue<InputFramePacket>(HighLatencyInputHistoryFrames);
+
+        static ClientInputFramePump()
+        {
+            MultiplayerSession.OnSessionStarted += ResetHistory;
+            MultiplayerSession.OnSessionEnded += ResetHistory;
+        }
+
         internal static void Update()
         {
             if (!MultiplayerSession.IsActive)
@@ -282,8 +294,44 @@ namespace CupheadOnline.Patches
             if (Plugin.Net == null || !Plugin.Net.IsConnected)
                 return;
 
-            var packet = UniversalInputRouter.BuildLocalInputFrame();
+            var packet = UniversalInputRouter.BuildLocalInputFrameForPlayer(MultiplayerSession.LocalId);
+            HighLatencyInputSync.RecordLocalFrame(MultiplayerSession.LocalId, packet);
+            ResendRecentHighLatencyInputs();
+            RememberHighLatencyInput(packet);
             Plugin.Net.SendInputFrame(ref packet);
+        }
+
+        static void ResendRecentHighLatencyInputs()
+        {
+            if (!HighLatencyInputSync.ShouldDelayNetworkGameplayInput((byte)MultiplayerSession.LocalId))
+                return;
+            if (_recentHighLatencyInputs.Count == 0)
+                return;
+
+            var frames = _recentHighLatencyInputs.ToArray();
+            for (int i = 0; i < frames.Length; i++)
+            {
+                var resend = frames[i];
+                Plugin.Net.SendInputFrame(ref resend);
+            }
+        }
+
+        static void RememberHighLatencyInput(InputFramePacket packet)
+        {
+            if (!HighLatencyInputSync.ShouldDelayNetworkGameplayInput((byte)MultiplayerSession.LocalId))
+            {
+                _recentHighLatencyInputs.Clear();
+                return;
+            }
+
+            _recentHighLatencyInputs.Enqueue(packet);
+            while (_recentHighLatencyInputs.Count > HighLatencyInputHistoryFrames)
+                _recentHighLatencyInputs.Dequeue();
+        }
+
+        static void ResetHistory()
+        {
+            _recentHighLatencyInputs.Clear();
         }
     }
 
@@ -306,6 +354,12 @@ namespace CupheadOnline.Patches
 
             float value;
             if (LocalDevE2ETest.TryGetLocalAxis(owner, actionId, out value))
+            {
+                __result = value;
+                return;
+            }
+
+            if (HighLatencyInputSync.TryGetDelayedAxis(owner, actionId, out value))
             {
                 __result = value;
                 return;
@@ -358,6 +412,12 @@ namespace CupheadOnline.Patches
 
             bool value;
             if (LocalDevE2ETest.TryGetLocalButton(owner, actionId, down, up, out value))
+            {
+                result = value;
+                return;
+            }
+
+            if (HighLatencyInputSync.TryGetDelayedButton(owner, actionId, down, up, out value))
             {
                 result = value;
                 return;

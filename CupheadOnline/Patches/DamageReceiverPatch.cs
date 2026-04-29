@@ -44,6 +44,11 @@ namespace CupheadOnline.Patches
             if (player == null)
                 return true;
 
+            bool highLatencyBuiltInSync = HighLatencyInputSync.ShouldSimulateBuiltInRemotePlayers()
+                && player.id <= PlayerId.PlayerTwo;
+            if (highLatencyBuiltInSync)
+                return MultiplayerSession.IsHost || DamageAuthority.IsAuthorised(__instance, info);
+
             if (!Plugin.LatencyFriendlyDamage)
             {
                 return MultiplayerSession.IsHost || DamageAuthority.IsAuthorised(__instance, info);
@@ -79,6 +84,22 @@ namespace CupheadOnline.Patches
             var player = __instance.GetComponent<AbstractPlayerController>();
             if (player == null)
                 return;
+
+            bool highLatencyBuiltInSync = HighLatencyInputSync.ShouldSimulateBuiltInRemotePlayers()
+                && player.id <= PlayerId.PlayerTwo;
+            if (highLatencyBuiltInSync)
+            {
+                if (!MultiplayerSession.IsHost)
+                    return;
+
+                Plugin.Net.SendDamageEventForParticipant(
+                    (byte)player.id,
+                    info.damage,
+                    info.stoneTime,
+                    (byte)info.damageSource,
+                    MultiplayerSession.Tick);
+                return;
+            }
 
             if (!Plugin.LatencyFriendlyDamage)
             {
@@ -131,7 +152,8 @@ namespace CupheadOnline.Patches
                 return true;
             if (receiver == null || receiver.type != DamageReceiver.Type.Enemy)
                 return true;
-
+            if (HighLatencyInputSync.ShouldSimulateBuiltInRemotePlayers())
+                return true;
             return MultiplayerSession.IsHost;
         }
     }

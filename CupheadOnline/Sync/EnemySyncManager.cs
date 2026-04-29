@@ -21,6 +21,8 @@ namespace CupheadOnline.Sync
     {
         private static int   _broadcastCounter;
         private const  int   BROADCAST_EVERY = 3; // frames (= 20 Hz at 60 Hz FixedUpdate)
+        private const  float HIGH_LATENCY_LEAD_MULTIPLIER = 1.0f;
+        private const  float HIGH_LATENCY_CLOCK_LEAD_MULTIPLIER = 1.0f;
         private static int   _recoveryBurstFrames;
 
         // Reflection cache for enemy HP field, keyed per runtime enemy type.
@@ -31,13 +33,26 @@ namespace CupheadOnline.Sync
         private static readonly Dictionary<int, EnemySnapshotState> _lastSent = new Dictionary<int, EnemySnapshotState>();
         private static readonly Dictionary<int, uint> _lastReceivedTicks = new Dictionary<int, uint>(128);
         private static readonly Dictionary<int, EnemyStatePacket> _lastReceivedStates = new Dictionary<int, EnemyStatePacket>(128);
+        private static readonly Dictionary<int, EnemyMotionEstimate> _motionEstimates = new Dictionary<int, EnemyMotionEstimate>(128);
+        private static readonly HashSet<int> _suppressedClientEnemies = new HashSet<int>();
         private static uint _lastReceivedBossTick;
+        private static float _lastHighLatencyVisualLogAt = -1f;
 
         private struct EnemySnapshotState
         {
             public float Hp;
             public byte Phase;
             public Vector3 Position;
+        }
+
+        private struct EnemyMotionEstimate
+        {
+            public bool HasSample;
+            public bool HasVelocity;
+            public Vector2 LastPosition;
+            public float LastTime;
+            public Vector2 Velocity;
+            public Vector2 Acceleration;
         }
 
         // ──────────────────────────────────────────────────────────────────────
@@ -73,12 +88,20 @@ namespace CupheadOnline.Sync
                 byte  phase = GetEnemyPhase(dr);
                 int   hash  = 0;
                 float animTime = 0f;
+                float velX = 0f;
+                float velY = 0f;
                 var   anim  = GetPrimaryAnimator(go);
                 if (anim != null)
                 {
                     var state = anim.GetCurrentAnimatorStateInfo(0);
                     hash = state.fullPathHash;
                     animTime = Mathf.Repeat(state.normalizedTime, 1f);
+                }
+                var rb = GetPrimaryRigidbody(go);
+                if (rb != null)
+                {
+                    velX = rb.velocity.x;
+                    velY = rb.velocity.y;
                 }
 
                 bool priority = bossPriorityMode || IsBossPriority(go, phase, enemyCount);
@@ -95,6 +118,9 @@ namespace CupheadOnline.Sync
                     BossHp     = hasBossHealth ? bossHp : -1f,
                     BossTotalHp = hasBossHealth ? bossTotalHp : -1f,
                     AnimNormalizedTime = animTime,
+                    StateTime = HighLatencyInputSync.PacketTimeNow(),
+                    VelX = velX,
+                    VelY = velY,
                 };
 
                 bool reliable = priority && ShouldSendReliableDelta(pkt);
@@ -114,13 +140,17 @@ namespace CupheadOnline.Sync
 
         public static void OnEnemyStateReceived(EnemyStatePacket pkt)
         {
-            ApplyLevelBossHealth(pkt);
+            bool deterministicHighLatency = ShouldTrustDeterministicClientEnemySimulation();
+            if (!deterministicHighLatency || ShouldApplyHighLatencyBossHealthAuthority())
+                ApplyLevelBossHealth(pkt);
 
             if (!EnemyRegistry.TryGet(pkt.InstanceId, out var dr))
             {
                 EnemyRegistry.MarkDirty(); // trigger a rescan next query
                 if (!EnemyRegistry.TryGet(pkt.InstanceId, out dr)) return;
             }
+
+            SuppressClientEnemySimulation(dr);
 
             uint lastReceivedTick;
             if (_lastReceivedTicks.TryGetValue(pkt.InstanceId, out lastReceivedTick)
@@ -129,13 +159,24 @@ namespace CupheadOnline.Sync
                 return;
             }
 
+            if (ShouldDropUntimedHighLatencyTransform(pkt))
+            {
+                if (!deterministicHighLatency)
+                    SetEnemyHp(dr, pkt.Hp);
+                return;
+            }
+
             _lastReceivedTicks[pkt.InstanceId] = pkt.Tick;
+            UpdateMotionEstimate(pkt);
             _lastReceivedStates[pkt.InstanceId] = pkt;
+
+            if (deterministicHighLatency)
+                return;
 
             var go = dr.gameObject;
 
             // ── Position: gentle lerp to avoid visual snap ────────────────────
-            var targetPos = new Vector3(pkt.PosX, pkt.PosY, go.transform.position.z);
+            var targetPos = GetPresentationPosition(pkt, go);
             float distance = Vector3.Distance(go.transform.position, targetPos);
             if (Plugin.VanillaTwoPlayerOnline)
             {
@@ -159,7 +200,7 @@ namespace CupheadOnline.Sync
                 // avoid overriding transition logic every single frame.
                 int localHash = anim.GetCurrentAnimatorStateInfo(0).fullPathHash;
                 float localTime = Mathf.Repeat(anim.GetCurrentAnimatorStateInfo(0).normalizedTime, 1f);
-                float remoteTime = Mathf.Repeat(pkt.AnimNormalizedTime, 1f);
+                float remoteTime = GetPresentationAnimTime(pkt);
                 float wrappedDelta = Mathf.Abs(Mathf.Repeat(localTime - remoteTime + 0.5f, 1f) - 0.5f);
                 if (localHash != pkt.AnimHash || (Plugin.VanillaTwoPlayerOnline && wrappedDelta > 0.03f))
                     anim.Play(pkt.AnimHash, 0, remoteTime);
@@ -170,6 +211,7 @@ namespace CupheadOnline.Sync
         {
             if (!MultiplayerSession.IsClient || Plugin.Net == null || !Plugin.Net.IsConnected)
                 return;
+            SuppressAllClientEnemySimulation();
             if (_lastReceivedStates.Count == 0)
                 return;
 
@@ -187,6 +229,9 @@ namespace CupheadOnline.Sync
                     continue;
                 }
 
+                if (ShouldTrustDeterministicClientEnemySimulation())
+                    continue;
+
                 ApplyLatestEnemySnapshot(dr, pkt);
             }
         }
@@ -194,7 +239,8 @@ namespace CupheadOnline.Sync
         static void ApplyLatestEnemySnapshot(DamageReceiver dr, EnemyStatePacket pkt)
         {
             var go = dr.gameObject;
-            var targetPos = new Vector3(pkt.PosX, pkt.PosY, go.transform.position.z);
+
+            var targetPos = GetPresentationPosition(pkt, go);
             if (Plugin.VanillaTwoPlayerOnline)
             {
                 go.transform.position = targetPos;
@@ -207,7 +253,8 @@ namespace CupheadOnline.Sync
                     : Vector3.Lerp(go.transform.position, targetPos, 0.3f);
             }
 
-            SetEnemyHp(dr, pkt.Hp);
+            if (!ShouldTrustDeterministicClientEnemySimulation())
+                SetEnemyHp(dr, pkt.Hp);
 
             var anim = GetPrimaryAnimator(go);
             if (anim == null || pkt.AnimHash == 0)
@@ -215,10 +262,170 @@ namespace CupheadOnline.Sync
 
             int localHash = anim.GetCurrentAnimatorStateInfo(0).fullPathHash;
             float localTime = Mathf.Repeat(anim.GetCurrentAnimatorStateInfo(0).normalizedTime, 1f);
-            float remoteTime = Mathf.Repeat(pkt.AnimNormalizedTime, 1f);
+            float remoteTime = GetPresentationAnimTime(pkt);
             float wrappedDelta = Mathf.Abs(Mathf.Repeat(localTime - remoteTime + 0.5f, 1f) - 0.5f);
             if (localHash != pkt.AnimHash || (Plugin.VanillaTwoPlayerOnline && wrappedDelta > 0.03f))
                 anim.Play(pkt.AnimHash, 0, remoteTime);
+        }
+
+        static bool ShouldPredictHostPresentation(EnemyStatePacket pkt)
+        {
+            if (!Plugin.VanillaTwoPlayerOnline || !MultiplayerSession.IsClient)
+                return false;
+            if (pkt.StateTime < 0f)
+                return false;
+
+            return EstimateIncomingEnemySnapshotAgeSeconds() >= 0.20f;
+        }
+
+        static bool ShouldTrustDeterministicClientEnemySimulation()
+        {
+            return Plugin.VanillaTwoPlayerOnline
+                && MultiplayerSession.IsClient
+                && HighLatencyInputSync.ShouldSimulateBuiltInRemotePlayers();
+        }
+
+        static bool ShouldApplyHighLatencyBossHealthAuthority()
+        {
+            return Plugin.VanillaTwoPlayerOnline
+                && MultiplayerSession.IsClient
+                && HighLatencyInputSync.ShouldSimulateBuiltInRemotePlayers();
+        }
+
+        static bool ShouldDropUntimedHighLatencyTransform(EnemyStatePacket pkt)
+        {
+            if (HighLatencyInputSync.ShouldSimulateBuiltInRemotePlayers())
+                return false;
+            if (!Plugin.VanillaTwoPlayerOnline || !MultiplayerSession.IsClient)
+                return false;
+            if (pkt.StateTime >= 0f)
+                return false;
+
+            return EstimateIncomingEnemySnapshotAgeSeconds() >= 0.20f;
+        }
+
+        static Vector3 GetPresentationPosition(EnemyStatePacket pkt, GameObject go)
+        {
+            var target = new Vector3(pkt.PosX, pkt.PosY, go.transform.position.z);
+            if (!ShouldPredictHostPresentation(pkt))
+                return target;
+
+            EnemyMotionEstimate estimate;
+            if (!_motionEstimates.TryGetValue(pkt.InstanceId, out estimate) || !estimate.HasVelocity)
+                return target;
+
+            float age = GetPresentationAge(pkt);
+            var basePos = new Vector2(pkt.PosX, pkt.PosY);
+            var velocity = new Vector2(pkt.VelX, pkt.VelY);
+            if (velocity.sqrMagnitude < 1f)
+                velocity = estimate.Velocity;
+            var predicted = basePos
+                + velocity * age
+                + estimate.Acceleration * (0.5f * age * age);
+
+            var delta = predicted - basePos;
+            float maxLead = Mathf.Max(120f, 520f * age);
+            if (delta.magnitude > maxLead)
+                predicted = basePos + delta.normalized * maxLead;
+
+            LogHighLatencyVisualMode();
+            return new Vector3(predicted.x, predicted.y, go.transform.position.z);
+        }
+
+        static float GetPresentationAnimTime(EnemyStatePacket pkt)
+        {
+            float t = Mathf.Repeat(pkt.AnimNormalizedTime, 1f);
+            if (!ShouldPredictHostPresentation(pkt))
+                return t;
+
+            float age = GetPresentationAge(pkt);
+            return Mathf.Repeat(t + age, 1f);
+        }
+
+        static float GetPresentationAge(EnemyStatePacket pkt)
+        {
+            if (pkt.StateTime >= 0f)
+            {
+                float clockAge = HighLatencyInputSync.PlayoutTimeNow() - pkt.StateTime;
+                if (clockAge >= 0f && clockAge <= 2.5f)
+                    return Mathf.Clamp(clockAge * HIGH_LATENCY_CLOCK_LEAD_MULTIPLIER, 0f, 1.25f);
+            }
+
+            float estimatedAge = EstimateIncomingEnemySnapshotAgeSeconds() * HIGH_LATENCY_LEAD_MULTIPLIER;
+            return Mathf.Clamp(estimatedAge, 0f, 1.25f);
+        }
+
+        static void UpdateMotionEstimate(EnemyStatePacket pkt)
+        {
+            if (pkt.StateTime < 0f)
+                return;
+
+            var position = new Vector2(pkt.PosX, pkt.PosY);
+            EnemyMotionEstimate estimate;
+            if (!_motionEstimates.TryGetValue(pkt.InstanceId, out estimate) || !estimate.HasSample)
+            {
+                estimate = new EnemyMotionEstimate
+                {
+                    HasSample = true,
+                    LastPosition = position,
+                    LastTime = pkt.StateTime,
+                };
+                _motionEstimates[pkt.InstanceId] = estimate;
+                return;
+            }
+
+            float dt = pkt.StateTime - estimate.LastTime;
+            if (dt <= 0.001f || dt > 0.5f)
+            {
+                estimate.LastPosition = position;
+                estimate.LastTime = pkt.StateTime;
+                _motionEstimates[pkt.InstanceId] = estimate;
+                return;
+            }
+
+            var newVelocity = (position - estimate.LastPosition) / dt;
+            if (estimate.HasVelocity)
+            {
+                var newAcceleration = (newVelocity - estimate.Velocity) / dt;
+                estimate.Acceleration = Vector2.Lerp(estimate.Acceleration, newAcceleration, 0.35f);
+                estimate.Velocity = Vector2.Lerp(estimate.Velocity, newVelocity, 0.65f);
+            }
+            else
+            {
+                estimate.Velocity = newVelocity;
+                estimate.Acceleration = Vector2.zero;
+                estimate.HasVelocity = true;
+            }
+
+            estimate.LastPosition = position;
+            estimate.LastTime = pkt.StateTime;
+            _motionEstimates[pkt.InstanceId] = estimate;
+        }
+
+        static float EstimateIncomingEnemySnapshotAgeSeconds()
+        {
+            float age = 0f;
+
+            if (Plugin.Net != null && Plugin.Net.Latency > 0)
+                age = Mathf.Max(age, Plugin.Net.Latency * 0.0005f);
+
+            if (Plugin.LanArtificialLatencyMs > 0)
+                age = Mathf.Max(age, Plugin.LanArtificialLatencyMs / 1000f);
+
+            return Mathf.Clamp(age, 0f, 2.5f);
+        }
+
+        static void LogHighLatencyVisualMode()
+        {
+            float now = Time.unscaledTime;
+            if (_lastHighLatencyVisualLogAt > 0f && now - _lastHighLatencyVisualLogAt < 5f)
+                return;
+
+            _lastHighLatencyVisualLogAt = now;
+            Plugin.Log.LogInfo(
+                "[EnemySync] High-latency host-state prediction active. Estimated snapshot age="
+                + EstimateIncomingEnemySnapshotAgeSeconds().ToString("0.000")
+                + "s.");
         }
 
         static Animator GetPrimaryAnimator(GameObject go)
@@ -230,6 +437,15 @@ namespace CupheadOnline.Sync
             return direct != null ? direct : go.GetComponentInChildren<Animator>();
         }
 
+        static Rigidbody2D GetPrimaryRigidbody(GameObject go)
+        {
+            if (go == null)
+                return null;
+
+            var direct = go.GetComponent<Rigidbody2D>();
+            return direct != null ? direct : go.GetComponentInChildren<Rigidbody2D>();
+        }
+
         public static void Reset()
         {
             _broadcastCounter = 0;
@@ -237,7 +453,59 @@ namespace CupheadOnline.Sync
             _lastSent.Clear();
             _lastReceivedTicks.Clear();
             _lastReceivedStates.Clear();
+            _motionEstimates.Clear();
+            _suppressedClientEnemies.Clear();
             _lastReceivedBossTick = 0;
+            _lastHighLatencyVisualLogAt = -1f;
+        }
+
+        static void SuppressAllClientEnemySimulation()
+        {
+            if (!ShouldSuppressClientEnemySimulation())
+                return;
+
+            var enemies = Object.FindObjectsOfType<DamageReceiver>();
+            for (int i = 0; i < enemies.Length; i++)
+            {
+                var dr = enemies[i];
+                if (dr != null && dr.type == DamageReceiver.Type.Enemy)
+                    SuppressClientEnemySimulation(dr);
+            }
+        }
+
+        static void SuppressClientEnemySimulation(DamageReceiver dr)
+        {
+            if (!ShouldSuppressClientEnemySimulation() || dr == null || dr.gameObject == null)
+                return;
+
+            int id = dr.gameObject.GetInstanceID();
+            if (!_suppressedClientEnemies.Add(id))
+                return;
+
+            var behaviours = dr.gameObject.GetComponentsInChildren<MonoBehaviour>(true);
+            int disabled = 0;
+            for (int i = 0; i < behaviours.Length; i++)
+            {
+                var behaviour = behaviours[i];
+                if (behaviour == null || ReferenceEquals(behaviour, dr))
+                    continue;
+                if (behaviour is DamageReceiver)
+                    continue;
+
+                behaviour.enabled = false;
+                disabled++;
+            }
+
+            Plugin.Log.LogInfo("[EnemySync] Suppressed client enemy simulation on "
+                + dr.gameObject.name
+                + " (disabled "
+                + disabled
+                + " behaviours).");
+        }
+
+        static bool ShouldSuppressClientEnemySimulation()
+        {
+            return false;
         }
 
         public static void TriggerRecoveryBurst(int frames = 150)
@@ -385,8 +653,20 @@ namespace CupheadOnline.Sync
             {
                 float total = Mathf.Max(1f, pkt.BossTotalHp);
                 float hp = Mathf.Clamp(pkt.BossHp, 0f, total);
+                float current = (float)currentProperty.GetValue(properties, null);
+                if (hp < current - 0.01f)
+                {
+                    var dealDamage = type.GetMethod("DealDamage", BindingFlags.Instance | BindingFlags.Public);
+                    if (dealDamage != null)
+                    {
+                        dealDamage.Invoke(properties, new object[] { current - hp });
+                        current = (float)currentProperty.GetValue(properties, null);
+                    }
+                }
+
                 totalField.SetValue(properties, total);
-                currentProperty.SetValue(properties, hp, null);
+                if (Mathf.Abs(current - hp) > 0.01f)
+                    currentProperty.SetValue(properties, hp, null);
             }
             catch
             {

@@ -22,7 +22,10 @@ namespace CupheadOnline.Patches
             if (wm == null) return;
 
             // Only subscribe for our LOCAL player — we broadcast their actions
-            if (!MultiplayerSession.IsLocalPlayer(player.id)) return;
+            bool hostAuthoritativeBuiltIn = Plugin.VanillaTwoPlayerOnline
+                && MultiplayerSession.IsHost
+                && player.id <= PlayerId.PlayerTwo;
+            if (!MultiplayerSession.IsLocalPlayer(player.id) && !hostAuthoritativeBuiltIn) return;
 
             wm.OnWeaponFire      += () => BroadcastShot(player, 0);
             wm.OnExStart         += () => BroadcastShot(player, 1);
@@ -47,6 +50,8 @@ namespace CupheadOnline.Patches
                 AimY      = (sbyte)(motor?.LookDirection.y.Value ?? 0),
                 WeaponId  = 0,
                 Tick      = MultiplayerSession.Tick,
+                PosX      = motor == null ? 0f : motor.transform.position.x,
+                PosY      = motor == null ? 0f : motor.transform.position.y,
             };
             Plugin.Net.SendWeaponEvent(ref pkt);
         }
@@ -68,6 +73,8 @@ namespace CupheadOnline.Patches
                 AimY      = 0,
                 WeaponId  = (byte)next,
                 Tick      = MultiplayerSession.Tick,
+                PosX      = motor == null ? 0f : motor.transform.position.x,
+                PosY      = motor == null ? 0f : motor.transform.position.y,
             };
             Plugin.Net.SendWeaponEvent(ref pkt);
         }
@@ -76,7 +83,7 @@ namespace CupheadOnline.Patches
     /// <summary>
     /// Patch the parry controller to broadcast parry events.
     /// </summary>
-    [HarmonyPatch(typeof(LevelPlayerParryController), "Parry")]
+    [HarmonyPatch(typeof(LevelPlayerParryController), "StartParry")]
     public static class ParryPatch
     {
         static void Postfix(LevelPlayerParryController __instance)
@@ -96,6 +103,8 @@ namespace CupheadOnline.Patches
                 AimY      = (sbyte)(motor?.LookDirection.y.Value ?? 0),
                 WeaponId  = 0,
                 Tick      = MultiplayerSession.Tick,
+                PosX      = motor == null ? 0f : motor.transform.position.x,
+                PosY      = motor == null ? 0f : motor.transform.position.y,
             };
             Plugin.Net.SendWeaponEvent(ref pkt);
         }

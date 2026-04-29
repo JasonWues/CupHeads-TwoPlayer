@@ -88,7 +88,8 @@ namespace CupheadOnline.Sync
             if (MultiplayerSession.IsClient && MultiplayerSession.IsLocalPlayer(playerId))
             {
                 StoreLocalAuthoritySnapshot(pkt);
-                ApplyLocalAuthoritySnapshot(playerId, pkt);
+                if (!HighLatencyInputSync.ShouldSimulateBuiltInRemotePlayers())
+                    ApplyLocalAuthoritySnapshot(playerId, pkt);
                 return;
             }
 
@@ -178,6 +179,16 @@ namespace CupheadOnline.Sync
         public static bool TryGetLocalAuthoritySnapshot(byte participantId, out PlayerStatePacket snapshot)
         {
             return _localAuthoritySnapshots.TryGetValue(participantId, out snapshot);
+        }
+
+        public static bool TryApplyLocalAuthoritySnapshot(PlayerId playerId)
+        {
+            PlayerStatePacket snapshot;
+            if (!TryGetLocalAuthoritySnapshot(playerId, out snapshot))
+                return false;
+
+            ApplyLocalAuthoritySnapshot(playerId, snapshot);
+            return true;
         }
 
         /// <summary>

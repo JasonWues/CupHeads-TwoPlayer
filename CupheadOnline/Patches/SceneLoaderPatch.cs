@@ -77,7 +77,11 @@ namespace CupheadOnline.Patches
         typeof(Levels), typeof(SceneLoader.Transition), typeof(SceneLoader.Icon), typeof(SceneLoader.Context))]
     public static class SceneLoaderLevelsPatch
     {
-        static bool Prefix(Levels level)
+        static bool Prefix(
+            Levels level,
+            SceneLoader.Transition transitionStart,
+            SceneLoader.Icon icon,
+            SceneLoader.Context context)
         {
             if (!SceneSyncState.CanStartSceneLoadAsThisPeer("level " + level))
                 return false;

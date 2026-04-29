@@ -127,6 +127,11 @@ namespace CupheadOnline.Patches
             new Dictionary<int, AbstractPlayerController>(6);
         static int _nextSelectionCursor;
 
+        internal static void ResetSelectionCursor()
+        {
+            _nextSelectionCursor = 0;
+        }
+
         internal static bool TryCollectPlayers(List<AbstractPlayerController> players)
         {
             if (players == null)

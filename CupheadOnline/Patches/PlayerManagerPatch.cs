@@ -123,12 +123,30 @@ namespace CupheadOnline.Patches
         }
     }
 
+    [HarmonyPatch(typeof(Level), "PlayAnnouncerReady")]
+    public static class LevelPlayAnnouncerReadyPatch
+    {
+        static void Prefix(Level __instance)
+        {
+            LevelStartSync.NotifyBattleIntroSequenceStarting(__instance);
+        }
+    }
+
     [HarmonyPatch(typeof(Level), "OnTransitionInComplete")]
     public static class LevelTransitionInCompletePatch
     {
         static void Postfix(Level __instance)
         {
             LevelStartSync.NotifyLocalTransitionInComplete(__instance);
+        }
+    }
+
+    [HarmonyPatch(typeof(Level.IntroProperties), "OnReadyAnimComplete")]
+    public static class LevelIntroReadyCompletePatch
+    {
+        static bool Prefix(Level.IntroProperties __instance)
+        {
+            return !LevelStartSync.TryHoldBattleIntroReady(__instance);
         }
     }
 }

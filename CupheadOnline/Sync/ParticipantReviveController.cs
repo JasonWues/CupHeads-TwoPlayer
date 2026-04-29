@@ -52,6 +52,8 @@ namespace CupheadOnline.Sync
             new Dictionary<PlayerId, float>();
         static readonly Dictionary<PlayerId, uint> PendingHostBuiltInReviveTicks =
             new Dictionary<PlayerId, uint>();
+        static readonly Dictionary<PlayerId, float> RecentBuiltInRevives =
+            new Dictionary<PlayerId, float>();
         static readonly Dictionary<PlayerId, Dictionary<Renderer, bool>> SuppressedBuiltInBodyRenderers =
             new Dictionary<PlayerId, Dictionary<Renderer, bool>>();
         static float _revivePauseCatchUpUntil = -1f;
@@ -71,6 +73,7 @@ namespace CupheadOnline.Sync
             ClientRemoteBuiltInParryStartedAt.Clear();
             MirroredBuiltInParryVisualAt.Clear();
             PendingHostBuiltInReviveTicks.Clear();
+            RecentBuiltInRevives.Clear();
             _revivePauseCatchUpUntil = -1f;
             _revivePauseCatchUpActive = false;
         }
@@ -239,6 +242,58 @@ namespace CupheadOnline.Sync
                 + ","
                 + position.y.ToString("0.00")
                 + ").");
+        }
+
+        public static void NotifyBuiltInParryAnimComplete(PlayerDeathEffect effect)
+        {
+            if (!MultiplayerSession.IsActive
+             || !MultiplayerSession.IsHost
+             || Plugin.Net == null
+             || !Plugin.Net.IsConnected
+             || effect == null)
+            {
+                return;
+            }
+
+            ExtraParticipantDeathBubbleTag extraTag;
+            if (ExtraParticipantReviveVisuals.IsExtraBubble(effect, out extraTag))
+                return;
+
+            PlayerId targetPlayerId;
+            if (!TryGetDeathEffectPlayerId(effect, out targetPlayerId))
+                return;
+            if (targetPlayerId != PlayerId.PlayerOne && targetPlayerId != PlayerId.PlayerTwo)
+                return;
+
+            var target = GetPlayerSafe(targetPlayerId);
+            if (target == null || target.stats == null)
+                return;
+            if (!target.IsDead && target.stats.Health > 0 && target.gameObject != null && target.gameObject.activeInHierarchy)
+                return;
+
+            PlayerId donorPlayerId = targetPlayerId == PlayerId.PlayerOne
+                ? PlayerId.PlayerTwo
+                : PlayerId.PlayerOne;
+            Vector2 revivePosition = effect.transform.position;
+
+            ResolveHostReviveRequest(
+                (byte)donorPlayerId,
+                revivePosition,
+                MultiplayerSession.Tick,
+                Plugin.Net);
+
+            if (target.IsDead
+             || target.stats.Health <= 0
+             || target.gameObject == null
+             || !target.gameObject.activeInHierarchy)
+            {
+                ApplyLocalRevive(targetPlayerId, revivePosition);
+            }
+
+            Plugin.Log.LogInfo(
+                "[ReviveSync] Resolved host built-in revive for "
+                + targetPlayerId
+                + " after death-heart parry animation completed.");
         }
 
         public static bool TryPlayClientRemoteBuiltInParryVisualOnly(PlayerDeathEffect effect)
@@ -635,6 +690,42 @@ namespace CupheadOnline.Sync
             return true;
         }
 
+        public static bool ShouldSuppressRecentBuiltInReviveDeath(PlayerStatusPacket pkt, bool fromRemote)
+        {
+            if (!MultiplayerSession.IsActive || pkt.ParticipantId > (byte)PlayerId.PlayerTwo)
+                return false;
+            if (!pkt.IsDead && pkt.Health > 0)
+                return false;
+
+            var playerId = (PlayerId)pkt.ParticipantId;
+            float suppressUntil;
+            if (!RecentBuiltInRevives.TryGetValue(playerId, out suppressUntil))
+                return false;
+            if (Time.unscaledTime > suppressUntil)
+            {
+                RecentBuiltInRevives.Remove(playerId);
+                return false;
+            }
+
+            Vector2 revivePosition;
+            if (!TryGetHostRevivePosition(playerId, out revivePosition))
+            {
+                var player = GetPlayerSafe(playerId);
+                revivePosition = player == null ? Vector2.zero : (Vector2)player.center;
+            }
+
+            ApplyLocalRevive(playerId, revivePosition, pushStatus: false);
+            Plugin.Log.LogInfo(
+                "[ReviveSync] Suppressed "
+                + (fromRemote ? "remote" : "local")
+                + " stale death status for recently revived "
+                + playerId
+                + " tick="
+                + pkt.Tick
+                + ".");
+            return true;
+        }
+
         public static void RestoreSuppressedBuiltInBody(LevelPlayerController player)
         {
             if (player == null)
@@ -712,10 +803,12 @@ namespace CupheadOnline.Sync
 
         static bool ShouldDeferHostBuiltInRevive(PlayerId playerId, PlayerDeathEffect pendingDeathEffect)
         {
-            if (!MultiplayerSession.IsClient || Plugin.Instance == null || pendingDeathEffect == null)
+            if (!MultiplayerSession.IsClient || Plugin.Instance == null)
                 return false;
             if (!MultiplayerSession.IsAuthoritativePlayer(playerId))
                 return true;
+            if (pendingDeathEffect == null)
+                return false;
 
             float visualAt;
             return MirroredBuiltInParryVisualAt.TryGetValue(playerId, out visualAt)
@@ -848,8 +941,15 @@ namespace CupheadOnline.Sync
             if (levelPlayer != null)
                 RestoreSuppressedBuiltInBody(levelPlayer);
 
+            if (player.gameObject != null && !player.gameObject.activeSelf)
+                player.gameObject.SetActive(true);
+            if (player.stats != null && player.stats.Health <= 0)
+                player.stats.SetHealth(Mathf.Max(1, player.stats.HealthMax));
+
             if (deathEffect != null)
                 UnityEngine.Object.Destroy(deathEffect.gameObject);
+
+            RecentBuiltInRevives[localPlayerId] = Time.unscaledTime + 2.0f;
 
             if (pushStatus)
                 ParticipantStatusTracker.PushLocalStatus(player);

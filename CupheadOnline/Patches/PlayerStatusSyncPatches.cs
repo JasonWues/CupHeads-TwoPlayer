@@ -66,6 +66,11 @@ namespace CupheadOnline.Patches
                 return false;
             return !ParticipantReviveController.TrySuppressClientRemoteBuiltInParryAnimComplete(__instance);
         }
+
+        static void Postfix(PlayerDeathEffect __instance)
+        {
+            ParticipantReviveController.NotifyBuiltInParryAnimComplete(__instance);
+        }
     }
 
     static class PlayerStatusPatchHelpers

@@ -39,6 +39,13 @@ namespace CupheadOnline.Sync
                 return;
             }
 
+            if (MultiplayerSession.IsClient
+             && MultiplayerSession.IsLocalPlayer((PlayerId)pkt.PlayerId)
+             && !HighLatencyInputSync.ShouldUseHostAuthorityForLocalBuiltInPlayer((PlayerId)pkt.PlayerId))
+            {
+                return;
+            }
+
             if (MultiplayerSession.IsHost
              && MultiplayerSession.IsNetworkControlledPlayer((PlayerId)pkt.PlayerId))
             {
@@ -74,6 +81,8 @@ namespace CupheadOnline.Sync
                 case 0: // Basic shot
                     // Raise the OnWeaponFire event so the animation controller plays the fire anim
                     TriggerAnimatorParam(player, "Shooting", true);
+                    RemoteProjectileVisuals.SpawnBasicShot(player, pkt);
+                    LanSteamE2ETest.NotifyRemoteProjectileVisual(pkt.PlayerId);
                     break;
 
                 case 1: // EX

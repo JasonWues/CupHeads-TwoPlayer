@@ -7,6 +7,7 @@ param(
     [int]$LanLatencyMs = 0,
     [int]$LanJitterMs = 0,
     [double]$LanUnreliableDropPercent = 0,
+    [switch]$VisualCombatOnly,
     [string]$HostRoot = "",
     [string]$ClientRoot = "",
     [string]$OutputRoot = ""
@@ -178,6 +179,7 @@ function Configure-TestCopies {
 
     foreach ($config in @($hostConfig, $clientConfig)) {
         Set-BepInExConfigValue $config "Debug" "AutoRunLanSteamE2E" "true"
+        Set-BepInExConfigValue $config "Debug" "AutoRunLanSteamE2EVisualOnly" ([string]([bool]$VisualCombatOnly)).ToLowerInvariant()
         Set-BepInExConfigValue $config "Debug" "AutoRunLanSteamE2ETarget" $TargetBossLevel
         Set-BepInExConfigValue $config "Debug" "UseSeparateSavePath" "true"
         Set-BepInExConfigValue $config "Debug" "LanArtificialLatencyMs" $LanLatencyMs
@@ -245,7 +247,22 @@ public static class CupheadContinuousCapture {
         public bool BossBarVisible;
         public double BossRedDeltaPct;
         public bool BossBarBoxesMatch;
+        public int HostBluePixelsPlayfield;
+        public int ClientBluePixelsPlayfield;
+        public string HostBlueBox;
+        public string ClientBlueBox;
+        public bool BlueBoxesVisible;
+        public double BlueCenterDeltaPixels;
+        public double BlueAreaDeltaPct;
         public string FramePath;
+    }
+
+    public class BlueStats {
+        public int Count;
+        public int MinX = 999999;
+        public int MinY = 999999;
+        public int MaxX = -1;
+        public int MaxY = -1;
     }
 
     public static Bitmap CaptureWindow(IntPtr hwnd, out CaptureInfo info) {
@@ -274,6 +291,40 @@ public static class CupheadContinuousCapture {
         return new PairBitmaps { Host = host, Client = client };
     }
 
+    public static void SavePairFrame(Bitmap host, Bitmap client, string framePath) {
+        int width = Math.Min(host.Width, client.Width);
+        int height = Math.Min(host.Height, client.Height);
+        using (Bitmap combined = new Bitmap(width * 2 + 8, height, PixelFormat.Format24bppRgb))
+        using (Graphics graphics = Graphics.FromImage(combined))
+        using (Brush brush = new SolidBrush(Color.Black))
+        using (Font font = new Font("Arial", 12)) {
+            graphics.FillRectangle(brush, 0, 0, combined.Width, combined.Height);
+            graphics.DrawImage(host, 0, 0, width, height);
+            graphics.DrawImage(client, width + 8, 0, width, height);
+            graphics.DrawString("HOST", font, Brushes.White, 8, 8);
+            graphics.DrawString("CLIENT", font, Brushes.White, width + 16, 8);
+            combined.Save(framePath, ImageFormat.Jpeg);
+        }
+    }
+
+    public static Metrics AnalyzeSavedFrame(string framePath, int frame, double timeSeconds) {
+        Bitmap host = null;
+        Bitmap client = null;
+        using (Bitmap combined = new Bitmap(framePath)) {
+            int width = Math.Max(1, (combined.Width - 8) / 2);
+            int height = combined.Height;
+            host = combined.Clone(new Rectangle(0, 0, width, height), PixelFormat.Format24bppRgb);
+            client = combined.Clone(new Rectangle(width + 8, 0, width, height), PixelFormat.Format24bppRgb);
+        }
+
+        try {
+            return AnalyzeAndSave(host, client, framePath, frame, timeSeconds);
+        } finally {
+            if (host != null) host.Dispose();
+            if (client != null) client.Dispose();
+        }
+    }
+
     public static Metrics AnalyzeAndSave(
         Bitmap host,
         Bitmap client,
@@ -295,8 +346,14 @@ public static class CupheadContinuousCapture {
         int playfieldPixels = 0;
         int hostRed = 0;
         int clientRed = 0;
+        int hostBlue = 0;
+        int clientBlue = 0;
         int hostMinX = 999999, hostMinY = 999999, hostMaxX = -1, hostMaxY = -1;
         int clientMinX = 999999, clientMinY = 999999, clientMaxX = -1, clientMaxY = -1;
+        int hostBlueMinX = 999999, hostBlueMinY = 999999, hostBlueMaxX = -1, hostBlueMaxY = -1;
+        int clientBlueMinX = 999999, clientBlueMinY = 999999, clientBlueMaxX = -1, clientBlueMaxY = -1;
+        BlueStats hostBlueStats = new BlueStats();
+        BlueStats clientBlueStats = new BlueStats();
 
         Rectangle bounds = new Rectangle(0, 0, width, height);
         BitmapData hostData = host.LockBits(bounds, ImageLockMode.ReadOnly, PixelFormat.Format24bppRgb);
@@ -329,6 +386,21 @@ public static class CupheadContinuousCapture {
                         playfieldPixels++;
                         sumPlayfield += delta;
                         if (delta != 0) playfieldExactMismatch++;
+
+                        if (hb > 115 && hg > 75 && hr < 165 && hb > hr + 15 && hb > hg - 35) {
+                            hostBlue++;
+                            if (x < hostBlueMinX) hostBlueMinX = x;
+                            if (x > hostBlueMaxX) hostBlueMaxX = x;
+                            if (y < hostBlueMinY) hostBlueMinY = y;
+                            if (y > hostBlueMaxY) hostBlueMaxY = y;
+                        }
+                        if (cb > 115 && cg > 75 && cr < 165 && cb > cr + 15 && cb > cg - 35) {
+                            clientBlue++;
+                            if (x < clientBlueMinX) clientBlueMinX = x;
+                            if (x > clientBlueMaxX) clientBlueMaxX = x;
+                            if (y < clientBlueMinY) clientBlueMinY = y;
+                            if (y > clientBlueMaxY) clientBlueMaxY = y;
+                        }
                     }
 
                     if (y < topHeight) {
@@ -352,10 +424,24 @@ public static class CupheadContinuousCapture {
                     }
                 }
             }
+
+            hostBlueStats = FindLargestBlueComponent(hostBytes, hostStride, width, height, topHeight);
+            clientBlueStats = FindLargestBlueComponent(clientBytes, clientStride, width, height, topHeight);
         } finally {
             host.UnlockBits(hostData);
             client.UnlockBits(clientData);
         }
+
+        hostBlue = hostBlueStats.Count;
+        clientBlue = clientBlueStats.Count;
+        hostBlueMinX = hostBlueStats.MinX;
+        hostBlueMinY = hostBlueStats.MinY;
+        hostBlueMaxX = hostBlueStats.MaxX;
+        hostBlueMaxY = hostBlueStats.MaxY;
+        clientBlueMinX = clientBlueStats.MinX;
+        clientBlueMinY = clientBlueStats.MinY;
+        clientBlueMaxX = clientBlueStats.MaxX;
+        clientBlueMaxY = clientBlueStats.MaxY;
 
         using (Bitmap combined = new Bitmap(width * 2 + 8, height, PixelFormat.Format24bppRgb))
         using (Graphics graphics = Graphics.FromImage(combined))
@@ -374,9 +460,28 @@ public static class CupheadContinuousCapture {
         double playfieldPixelCount = Math.Max(1.0, (double)playfieldPixels);
         string hostBox = hostRed > 0 ? hostMinX + "," + hostMinY + "-" + hostMaxX + "," + hostMaxY : "none";
         string clientBox = clientRed > 0 ? clientMinX + "," + clientMinY + "-" + clientMaxX + "," + clientMaxY : "none";
+        string hostBlueBox = hostBlue > 0 ? hostBlueMinX + "," + hostBlueMinY + "-" + hostBlueMaxX + "," + hostBlueMaxY : "none";
+        string clientBlueBox = clientBlue > 0 ? clientBlueMinX + "," + clientBlueMinY + "-" + clientBlueMaxX + "," + clientBlueMaxY : "none";
         int maxRed = Math.Max(hostRed, clientRed);
         double redDelta = maxRed > 0 ? Math.Abs(hostRed - clientRed) * 100.0 / maxRed : 0.0;
         bool bossVisible = hostRed > 500 && clientRed > 500 && (hostMaxX - hostMinX) > 120 && (clientMaxX - clientMinX) > 120;
+        int maxBlue = Math.Max(hostBlue, clientBlue);
+        double blueAreaDelta = maxBlue > 0 ? Math.Abs(hostBlue - clientBlue) * 100.0 / maxBlue : 0.0;
+        bool blueVisible = hostBlue > 1200 && clientBlue > 1200
+            && (hostBlueMaxX - hostBlueMinX) > 45
+            && (clientBlueMaxX - clientBlueMinX) > 45
+            && (hostBlueMaxY - hostBlueMinY) > 35
+            && (clientBlueMaxY - clientBlueMinY) > 35;
+        double blueCenterDelta = 0.0;
+        if (blueVisible) {
+            double hostCx = (hostBlueMinX + hostBlueMaxX) / 2.0;
+            double hostCy = (hostBlueMinY + hostBlueMaxY) / 2.0;
+            double clientCx = (clientBlueMinX + clientBlueMaxX) / 2.0;
+            double clientCy = (clientBlueMinY + clientBlueMaxY) / 2.0;
+            double dx = hostCx - clientCx;
+            double dy = hostCy - clientCy;
+            blueCenterDelta = Math.Sqrt(dx * dx + dy * dy);
+        }
 
         return new Metrics {
             Frame = frame,
@@ -400,8 +505,96 @@ public static class CupheadContinuousCapture {
             BossBarVisible = bossVisible,
             BossRedDeltaPct = Math.Round(redDelta, 3),
             BossBarBoxesMatch = hostBox == clientBox,
+            HostBluePixelsPlayfield = hostBlue,
+            ClientBluePixelsPlayfield = clientBlue,
+            HostBlueBox = hostBlueBox,
+            ClientBlueBox = clientBlueBox,
+            BlueBoxesVisible = blueVisible,
+            BlueCenterDeltaPixels = Math.Round(blueCenterDelta, 3),
+            BlueAreaDeltaPct = Math.Round(blueAreaDelta, 3),
             FramePath = framePath
         };
+    }
+
+    static BlueStats FindLargestBlueComponent(byte[] bytes, int stride, int width, int height, int topHeight) {
+        BlueStats best = new BlueStats();
+        int yStart = topHeight;
+        int yEnd = Math.Min(height, (int)(height * 0.90));
+        bool[] seen = new bool[width * height];
+        int[] stack = new int[width * height];
+
+        for (int y = yStart; y < yEnd; y++) {
+            for (int x = 0; x < width; x++) {
+                int startIndex = y * width + x;
+                if (seen[startIndex])
+                    continue;
+                seen[startIndex] = true;
+                if (!IsBluePixel(bytes, stride, x, y))
+                    continue;
+
+                int count = 0;
+                int minX = x, maxX = x, minY = y, maxY = y;
+                int sp = 0;
+                stack[sp++] = startIndex;
+                while (sp > 0) {
+                    int packed = stack[--sp];
+                    int cx = packed % width;
+                    int cy = packed / width;
+                    count++;
+                    if (cx < minX) minX = cx;
+                    if (cx > maxX) maxX = cx;
+                    if (cy < minY) minY = cy;
+                    if (cy > maxY) maxY = cy;
+
+                    TryPushBlue(bytes, stride, width, height, yStart, yEnd, cx + 1, cy, seen, stack, ref sp);
+                    TryPushBlue(bytes, stride, width, height, yStart, yEnd, cx - 1, cy, seen, stack, ref sp);
+                    TryPushBlue(bytes, stride, width, height, yStart, yEnd, cx, cy + 1, seen, stack, ref sp);
+                    TryPushBlue(bytes, stride, width, height, yStart, yEnd, cx, cy - 1, seen, stack, ref sp);
+                }
+
+                if (count > best.Count) {
+                    best.Count = count;
+                    best.MinX = minX;
+                    best.MaxX = maxX;
+                    best.MinY = minY;
+                    best.MaxY = maxY;
+                }
+            }
+        }
+
+        return best;
+    }
+
+    static void TryPushBlue(
+        byte[] bytes,
+        int stride,
+        int width,
+        int height,
+        int yStart,
+        int yEnd,
+        int x,
+        int y,
+        bool[] seen,
+        int[] stack,
+        ref int sp) {
+        if (x < 0 || x >= width || y < yStart || y >= yEnd || y < 0 || y >= height)
+            return;
+
+        int index = y * width + x;
+        if (seen[index])
+            return;
+
+        seen[index] = true;
+        if (IsBluePixel(bytes, stride, x, y))
+            stack[sp++] = index;
+    }
+
+    static bool IsBluePixel(byte[] bytes, int stride, int x, int y) {
+        int i = y * stride + x * 3;
+        int b = bytes[i];
+        int g = bytes[i + 1];
+        int r = bytes[i + 2];
+        return b > 115 && g > 75 && r < 165 && b > r + 15 && b > g - 35;
     }
 }
 "@ -ReferencedAssemblies System.Drawing
@@ -516,6 +709,7 @@ $frameDelay = [Math]::Max(0.01, 1.0 / [Math]::Max(1, $Fps))
 $started = Get-Date
 $deadline = $started.AddSeconds($MaxSeconds)
 $metrics = New-Object System.Collections.Generic.List[object]
+$capturedFrames = New-Object System.Collections.Generic.List[object]
 $hostPass = $false
 $clientPass = $false
 $failed = $false
@@ -530,7 +724,12 @@ while ((Get-Date) -lt $deadline) {
     try {
         $framePath = Join-Path $framesDir ("frame_{0:D6}.jpg" -f $frame)
         $elapsed = ((Get-Date) - $started).TotalSeconds
-        $metrics.Add([CupheadContinuousCapture]::AnalyzeAndSave($pair.Host, $pair.Client, $framePath, $frame, $elapsed))
+        [CupheadContinuousCapture]::SavePairFrame($pair.Host, $pair.Client, $framePath)
+        $capturedFrames.Add([pscustomobject]@{
+            Frame = $frame
+            TimeSeconds = $elapsed
+            Path = $framePath
+        })
     } finally {
         if ($pair -ne $null) {
             if ($pair.Host -ne $null) { $pair.Host.Dispose() }
@@ -555,7 +754,12 @@ while ((Get-Date) -lt $deadline) {
             try {
                 $framePath = Join-Path $framesDir ("frame_{0:D6}.jpg" -f $frame)
                 $elapsed = ((Get-Date) - $started).TotalSeconds
-                $metrics.Add([CupheadContinuousCapture]::AnalyzeAndSave($pair.Host, $pair.Client, $framePath, $frame, $elapsed))
+                [CupheadContinuousCapture]::SavePairFrame($pair.Host, $pair.Client, $framePath)
+                $capturedFrames.Add([pscustomobject]@{
+                    Frame = $frame
+                    TimeSeconds = $elapsed
+                    Path = $framePath
+                })
             } finally {
                 if ($pair -ne $null) {
                     if ($pair.Host -ne $null) { $pair.Host.Dispose() }
@@ -576,6 +780,10 @@ while ((Get-Date) -lt $deadline) {
 
 $hostTextFinal = Read-Log $hostLog
 $clientTextFinal = Read-Log $clientLog
+$hostLogCopy = Join-Path $runDir "host-LogOutput.log"
+$clientLogCopy = Join-Path $runDir "client-LogOutput.log"
+Copy-Item -LiteralPath $hostLog -Destination $hostLogCopy -Force -ErrorAction SilentlyContinue
+Copy-Item -LiteralPath $clientLog -Destination $clientLogCopy -Force -ErrorAction SilentlyContinue
 $hostSummary = (($hostTextFinal -split "`r?`n") | Where-Object { $_ -match "level-start visual|Level-start visual|Released level start|Local level start gate|Guest-only shooting smoke|Fight smoke complete|pause menu|resume|pause sync|PAUSE/RESUME|game-over|Game-over|Retry|GAME OVER RETRY|HOST PASS|FAIL" } | Select-Object -Last 24) -join "`n"
 $clientSummary = (($clientTextFinal -split "`r?`n") | Where-Object { $_ -match "level-start visual|Level-start visual|Host released level start|Local level start gate|Client host-checkpoint pause/resume sync complete|Client pause/resume sync complete|pause menu|resume|game-over|Game-over|Retry|CLIENT GAME OVER RETRY|CLIENT PASS|FAIL|Received host fight checkpoint|Sanitized Player 1 loadout|Simulation drift detected|Host snapshots stalled" } | Select-Object -Last 24) -join "`n"
 $legacyLoadoutFixtureExercised = $false
@@ -605,8 +813,32 @@ if ($syncHealthIssues.Count -gt 0) {
     $syncHealthFailure = ($syncHealthIssues -join " ")
 }
 
+foreach ($process in @($hostProcess, $clientProcess)) {
+    try {
+        if ($process -and -not $process.HasExited) {
+            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+        }
+    } catch {
+    }
+}
+
+foreach ($captured in $capturedFrames) {
+    $metrics.Add([CupheadContinuousCapture]::AnalyzeSavedFrame(
+        [string]$captured.Path,
+        [int]$captured.Frame,
+        [double]$captured.TimeSeconds))
+}
+
 $bossFrames = @($metrics | Where-Object { $_.BossBarVisible })
 $bossMismatchFrames = @($bossFrames | Where-Object { $_.BossRedDeltaPct -gt 1.0 -or -not $_.BossBarBoxesMatch })
+$blueFrames = @($metrics | Where-Object { $_.BlueBoxesVisible -and $_.BossBarVisible })
+$blueMismatchFrames = @($blueFrames | Where-Object { $_.BlueCenterDeltaPixels -gt 120.0 -or $_.BlueAreaDeltaPct -gt 65.0 })
+$blueSyncPassRatio = if ($blueFrames.Count -gt 0) { [Math]::Round(1.0 - ($blueMismatchFrames.Count / [double]$blueFrames.Count), 4) } else { 1.0 }
+if ($VisualCombatOnly -and $blueFrames.Count -ge 20 -and $blueSyncPassRatio -lt 0.95) {
+    $failed = $true
+    $visualSyncFailure = " Visual frame sync below 95%: blue-object pass ratio " + $blueSyncPassRatio + " (" + ($blueFrames.Count - $blueMismatchFrames.Count) + "/" + $blueFrames.Count + ")."
+    $syncHealthFailure = ($syncHealthFailure + $visualSyncFailure).Trim()
+}
 $exactMatchFrames = @($metrics | Where-Object { $_.ExactMismatchPixels -eq 0 })
 $fullMismatchFrames = @($metrics | Where-Object { $_.ExactMismatchPixels -gt 0 })
 $maxOverall = ($metrics | Sort-Object MeanAbsDiffPerChannel -Descending | Select-Object -First 1)
@@ -628,6 +860,7 @@ $report = [pscustomobject]@{
     ClientPass = $clientPass
     Failed = $failed
     SteamParityProfile = [bool]$SteamParityProfile
+    VisualCombatOnly = [bool]$VisualCombatOnly
     LanLatencyMs = $LanLatencyMs
     LanJitterMs = $LanJitterMs
     LanUnreliableDropPercent = $LanUnreliableDropPercent
@@ -636,13 +869,20 @@ $report = [pscustomobject]@{
     SteamParityFailure = $steamParityFailure
     SyncHealthFailure = $syncHealthFailure
     VideoPath = $videoPath
+    HostLogPath = $hostLogCopy
+    ClientLogPath = $clientLogCopy
     FramesDirectory = $framesDir
     BossVisibleFrameCount = $bossFrames.Count
     BossMismatchFrameCount = $bossMismatchFrames.Count
+    BlueObjectVisibleFrameCount = $blueFrames.Count
+    BlueObjectMismatchFrameCount = $blueMismatchFrames.Count
+    BlueObjectSyncPassRatio = $blueSyncPassRatio
+    BlueObjectSyncEnforced = [bool]$VisualCombatOnly
     ExactFullFrameMatchCount = $exactMatchFrames.Count
     ExactFullFrameMismatchCount = $fullMismatchFrames.Count
     ExactFullFrameMatch = $fullMismatchFrames.Count -eq 0
     BossMismatchFrames = @($bossMismatchFrames | Select-Object -First 20 Frame,TimeSeconds,HostRedPixelsTop,ClientRedPixelsTop,HostRedBox,ClientRedBox,BossRedDeltaPct)
+    BlueObjectMismatchFrames = @($blueMismatchFrames | Select-Object -First 20 Frame,TimeSeconds,HostBluePixelsPlayfield,ClientBluePixelsPlayfield,HostBlueBox,ClientBlueBox,BlueCenterDeltaPixels,BlueAreaDeltaPct)
     MaxOverallDiffFrame = $maxOverall
     MaxExactMismatchFrame = $maxExactMismatch
     MaxPlayfieldMismatchFrame = $maxPlayfieldMismatch

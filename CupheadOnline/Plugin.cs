@@ -47,12 +47,14 @@ namespace CupheadOnline
         static ConfigEntry<bool> _cfgAutoRunLocalDevE2E;
         static ConfigEntry<bool> _cfgAutoRunLocalDevTutorial;
         static ConfigEntry<bool> _cfgAutoRunLanSteamE2E;
+        static ConfigEntry<bool> _cfgAutoRunLanSteamE2EVisualOnly;
         static ConfigEntry<string> _cfgAutoRunLanSteamE2ETarget;
         static ConfigEntry<bool> _cfgUseSeparateSavePath;
         static ConfigEntry<string> _cfgSeparateSavePath;
         static ConfigEntry<int> _cfgLanArtificialLatencyMs;
         static ConfigEntry<int> _cfgLanArtificialJitterMs;
         static ConfigEntry<float> _cfgLanUnreliableDropPercent;
+        static ConfigEntry<int> _cfgOnlineFrameRateCap;
         static ConfigEntry<bool> _cfgEnableStartupSplash;
         static ConfigEntry<bool> _cfgStartupSplashAllowSkip;
         static ConfigEntry<bool> _cfgStartupSplashStaticOverlay;
@@ -61,6 +63,9 @@ namespace CupheadOnline
         static ConfigEntry<bool> _cfgBossHpScalingEnabled;
         static ConfigEntry<float> _cfgBossHpPerExtraPlayer;
         static ConfigEntry<int> _cfgPreferredPlayerColor;
+        static bool _frameRatePolicyApplied;
+        static int _previousTargetFrameRate;
+        static int _previousVSyncCount;
 
         public static bool ShowConnectionHud => _cfgShowConnectionHud == null || _cfgShowConnectionHud.Value;
         public static bool VerboseLoggingEnabled => _cfgVerboseLogging != null && _cfgVerboseLogging.Value;
@@ -82,6 +87,7 @@ namespace CupheadOnline
         public static bool AutoRunLocalDevE2E => _cfgAutoRunLocalDevE2E != null && _cfgAutoRunLocalDevE2E.Value;
         public static bool AutoRunLocalDevTutorial => _cfgAutoRunLocalDevTutorial != null && _cfgAutoRunLocalDevTutorial.Value;
         public static bool AutoRunLanSteamE2E => _cfgAutoRunLanSteamE2E != null && _cfgAutoRunLanSteamE2E.Value;
+        public static bool AutoRunLanSteamE2EVisualOnly => _cfgAutoRunLanSteamE2EVisualOnly != null && _cfgAutoRunLanSteamE2EVisualOnly.Value;
         public static string AutoRunLanSteamE2ETarget =>
             _cfgAutoRunLanSteamE2ETarget == null ? string.Empty : (_cfgAutoRunLanSteamE2ETarget.Value ?? string.Empty).Trim();
         public static bool UseSeparateSavePath => _cfgUseSeparateSavePath != null && _cfgUseSeparateSavePath.Value;
@@ -98,6 +104,7 @@ namespace CupheadOnline
         public static int LanArtificialLatencyMs => _cfgLanArtificialLatencyMs == null ? 0 : Mathf.Max(0, _cfgLanArtificialLatencyMs.Value);
         public static int LanArtificialJitterMs => _cfgLanArtificialJitterMs == null ? 0 : Mathf.Max(0, _cfgLanArtificialJitterMs.Value);
         public static float LanUnreliableDropPercent => _cfgLanUnreliableDropPercent == null ? 0f : Mathf.Clamp(_cfgLanUnreliableDropPercent.Value, 0f, 100f);
+        public static int OnlineFrameRateCap => _cfgOnlineFrameRateCap == null ? 60 : Mathf.Clamp(_cfgOnlineFrameRateCap.Value, 0, 240);
         public static bool EnableStartupSplash => _cfgEnableStartupSplash == null || _cfgEnableStartupSplash.Value;
         public static bool StartupSplashAllowSkip => _cfgStartupSplashAllowSkip == null || _cfgStartupSplashAllowSkip.Value;
         public static bool StartupSplashStaticOverlay => _cfgStartupSplashStaticOverlay != null && _cfgStartupSplashStaticOverlay.Value;
@@ -161,6 +168,8 @@ namespace CupheadOnline
                 "Automatically create/use a fresh local-dev test save and load the tutorial. Intended for a separate test copy only.");
             _cfgAutoRunLanSteamE2E = Config.Bind("Debug", "AutoRunLanSteamE2E", false,
                 "Automatically run a two-process LAN transport smoke test. Start one copy as LanHost and one as LanClient with AutoStartLanTransport enabled.");
+            _cfgAutoRunLanSteamE2EVisualOnly = Config.Bind("Debug", "AutoRunLanSteamE2EVisualOnly", false,
+                "When AutoRunLanSteamE2E is enabled, stop after a clean synced live-combat visual window instead of running revive/pause/retry checks.");
             _cfgAutoRunLanSteamE2ETarget = Config.Bind("Debug", "AutoRunLanSteamE2ETarget", "",
                 "Optional Levels enum name for the LAN smoke test boss target, such as Slime, Frogs, Flower, or Veggies. Empty means nearest boss.");
             _cfgUseSeparateSavePath = Config.Bind("Debug", "UseSeparateSavePath", false,
@@ -173,6 +182,8 @@ namespace CupheadOnline
                 "Dev-only random +/- packet delay jitter for LAN Steam-emulation tests.");
             _cfgLanUnreliableDropPercent = Config.Bind("Debug", "LanUnreliableDropPercent", 0f,
                 "Dev-only packet loss percentage for unreliable LAN Steam-emulation packets. Reliable packets are delayed but not dropped.");
+            _cfgOnlineFrameRateCap = Config.Bind("Networking", "OnlineFrameRateCap", 60,
+                "Frame-rate cap applied while a multiplayer session or LAN/Steam E2E test is active. Cuphead battle logic is frame-sensitive, so peers should use the same cap. Use 0 to disable.");
             _cfgEnableStartupSplash = Config.Bind("StartupSplash", "EnableStartupSplash", true,
                 "Play BepInEx/plugins/CupheadOnline/Assets/CupHeadsIntro.mp4 over the game's startup/title intro.");
             _cfgStartupSplashAllowSkip = Config.Bind("StartupSplash", "AllowSkip", true,
@@ -246,7 +257,9 @@ namespace CupheadOnline
             PatchTracked(harmony, registeredPatchTypes, typeof(PlayerLevelInitPatch));
             PatchTracked(harmony, registeredPatchTypes, typeof(StatsLevelInitPatch));
             PatchTracked(harmony, registeredPatchTypes, typeof(LevelStartPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(LevelPlayAnnouncerReadyPatch));
             PatchTracked(harmony, registeredPatchTypes, typeof(LevelTransitionInCompletePatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(LevelIntroReadyCompletePatch));
             PatchTracked(harmony, registeredPatchTypes, typeof(PlayerDeathStatePatch));
             PatchTracked(harmony, registeredPatchTypes, typeof(PlayerReviveStatePatch));
             PatchTracked(harmony, registeredPatchTypes, typeof(PlayerStatsInitialStatusPatch));
@@ -322,6 +335,7 @@ namespace CupheadOnline
             PatchTracked(harmony, registeredPatchTypes, typeof(PlayerInputButtonPatch));
             PatchTracked(harmony, registeredPatchTypes, typeof(PlayerInputButtonDownPatch));
             PatchTracked(harmony, registeredPatchTypes, typeof(PlayerInputButtonUpPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(ProjectileTrackingPatch));
             PatchTracked(harmony, registeredPatchTypes, typeof(ParryPatch));
 
             // Damage authority
@@ -340,6 +354,11 @@ namespace CupheadOnline
             // Deterministic RNG
             PatchTracked(harmony, registeredPatchTypes, typeof(RandPatch));
             PatchTracked(harmony, registeredPatchTypes, typeof(RandIntPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(UnityRandomRangeFloatPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(UnityRandomRangeIntPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(UnityRandomValuePatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(RandBoolPatch));
+            PatchTracked(harmony, registeredPatchTypes, typeof(RandPosOrNegPatch));
 
             AuditPatchCoverage(registeredPatchTypes);
 
@@ -412,6 +431,7 @@ namespace CupheadOnline
 
         void Update()
         {
+            ApplyFrameRatePolicy();
             MainThreadQueue.Drain();
             Net?.Poll();
             MultiplayerSession.EnsureCupheadMultiplayerState();
@@ -442,6 +462,36 @@ namespace CupheadOnline
         void LateUpdate()
         {
             EnemySyncManager.ClientLateTick();
+        }
+
+        static void ApplyFrameRatePolicy()
+        {
+            int cap = OnlineFrameRateCap;
+            bool shouldApply = cap > 0
+                && (MultiplayerSession.IsActive || AutoRunLanSteamE2E || AutoStartLanTransport);
+
+            if (shouldApply)
+            {
+                if (!_frameRatePolicyApplied)
+                {
+                    _previousTargetFrameRate = Application.targetFrameRate;
+                    _previousVSyncCount = QualitySettings.vSyncCount;
+                    _frameRatePolicyApplied = true;
+                }
+
+                if (QualitySettings.vSyncCount != 0)
+                    QualitySettings.vSyncCount = 0;
+                if (Application.targetFrameRate != cap)
+                    Application.targetFrameRate = cap;
+                return;
+            }
+
+            if (!_frameRatePolicyApplied)
+                return;
+
+            Application.targetFrameRate = _previousTargetFrameRate;
+            QualitySettings.vSyncCount = _previousVSyncCount;
+            _frameRatePolicyApplied = false;
         }
 
         void OnSceneLoaded(Scene scene, LoadSceneMode mode)

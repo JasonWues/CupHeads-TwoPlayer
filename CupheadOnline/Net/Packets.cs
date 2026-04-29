@@ -59,6 +59,14 @@ namespace CupheadOnline.Net
         LanSteamE2ERetryClicked = 17,
         LanSteamE2ERetryObserved = 18,
         LanSteamE2ELevelReleasedObserved = 19,
+        LanSteamE2EFightReadyObserved = 20,
+        LanSteamE2EFightDamageStarted = 21,
+        LevelBattleReady = 22,
+        LevelBattleRelease = 23,
+        LevelIntroReady = 24,
+        LevelIntroRelease = 25,
+        LanSteamE2EVisualCombatObserved = 26,
+        LanSteamE2EVisualCombatComplete = 27,
     }
 
     public enum MapDialogueAction : byte
@@ -131,6 +139,7 @@ namespace CupheadOnline.Net
         public float AxisY;
         public uint Buttons;
         public uint Tick;
+        public float InputTime;
 
         public bool IsPressed(CupheadButton btn) => (Buttons & (1u << (int)btn)) != 0;
 
@@ -140,6 +149,7 @@ namespace CupheadOnline.Net
             w.Write(AxisY);
             w.Write(Buttons);
             w.Write(Tick);
+            w.Write(InputTime);
         }
 
         public void Read(BinaryReader r)
@@ -148,6 +158,9 @@ namespace CupheadOnline.Net
             AxisY = r.ReadSingle();
             Buttons = r.ReadUInt32();
             Tick = r.ReadUInt32();
+            InputTime = -1f;
+            if (r.BaseStream.Position <= r.BaseStream.Length - 4)
+                InputTime = r.ReadSingle();
         }
     }
 
@@ -159,6 +172,8 @@ namespace CupheadOnline.Net
         public sbyte AimY;
         public byte WeaponId;
         public uint Tick;
+        public float PosX;
+        public float PosY;
 
         public void Write(BinaryWriter w)
         {
@@ -168,6 +183,8 @@ namespace CupheadOnline.Net
             w.Write(AimY);
             w.Write(WeaponId);
             w.Write(Tick);
+            w.Write(PosX);
+            w.Write(PosY);
         }
 
         public void Read(BinaryReader r)
@@ -178,6 +195,13 @@ namespace CupheadOnline.Net
             AimY = r.ReadSByte();
             WeaponId = r.ReadByte();
             Tick = r.ReadUInt32();
+            PosX = 0f;
+            PosY = 0f;
+            if (r.BaseStream.Position <= r.BaseStream.Length - 8)
+            {
+                PosX = r.ReadSingle();
+                PosY = r.ReadSingle();
+            }
         }
     }
 
@@ -220,6 +244,9 @@ namespace CupheadOnline.Net
         public float BossHp;
         public float BossTotalHp;
         public float AnimNormalizedTime;
+        public float StateTime;
+        public float VelX;
+        public float VelY;
 
         public void Write(BinaryWriter w)
         {
@@ -233,6 +260,9 @@ namespace CupheadOnline.Net
             w.Write(BossHp);
             w.Write(BossTotalHp);
             w.Write(AnimNormalizedTime);
+            w.Write(StateTime);
+            w.Write(VelX);
+            w.Write(VelY);
         }
 
         public void Read(BinaryReader r)
@@ -247,6 +277,9 @@ namespace CupheadOnline.Net
             BossHp = -1f;
             BossTotalHp = -1f;
             AnimNormalizedTime = 0f;
+            StateTime = -1f;
+            VelX = 0f;
+            VelY = 0f;
             if (r.BaseStream.Position <= r.BaseStream.Length - 8)
             {
                 BossHp = r.ReadSingle();
@@ -254,6 +287,13 @@ namespace CupheadOnline.Net
             }
             if (r.BaseStream.Position <= r.BaseStream.Length - 4)
                 AnimNormalizedTime = r.ReadSingle();
+            if (r.BaseStream.Position <= r.BaseStream.Length - 4)
+                StateTime = r.ReadSingle();
+            if (r.BaseStream.Position <= r.BaseStream.Length - 8)
+            {
+                VelX = r.ReadSingle();
+                VelY = r.ReadSingle();
+            }
         }
     }
 
@@ -524,6 +564,7 @@ namespace CupheadOnline.Net
         public ushort SaveRevision;
         public float HostBattleElapsed;
         public uint Tick;
+        public long UtcReleaseTicks;
 
         public SessionSignalKind Kind => (SessionSignalKind)Signal;
 
@@ -533,6 +574,7 @@ namespace CupheadOnline.Net
             w.Write(SaveRevision);
             w.Write(HostBattleElapsed);
             w.Write(Tick);
+            w.Write(UtcReleaseTicks);
         }
 
         public void Read(BinaryReader r)
@@ -541,10 +583,13 @@ namespace CupheadOnline.Net
             SaveRevision = r.ReadUInt16();
             HostBattleElapsed = -1f;
             Tick = 0u;
+            UtcReleaseTicks = 0L;
             if (r.BaseStream.Position <= r.BaseStream.Length - 4)
                 HostBattleElapsed = r.ReadSingle();
             if (r.BaseStream.Position <= r.BaseStream.Length - 4)
                 Tick = r.ReadUInt32();
+            if (r.BaseStream.Position <= r.BaseStream.Length - 8)
+                UtcReleaseTicks = r.ReadInt64();
         }
     }
 

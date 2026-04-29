@@ -401,7 +401,23 @@ namespace CupheadOnline.Sync
                     break;
 
                 case SessionSignalKind.LevelStartRelease:
-                    LevelStartSync.HandleRemoteLevelStartRelease(pkt.SaveRevision);
+                    LevelStartSync.HandleRemoteLevelStartRelease(pkt.SaveRevision, pkt.UtcReleaseTicks);
+                    break;
+
+                case SessionSignalKind.LevelBattleReady:
+                    LevelStartSync.HandleRemoteLevelBattleReady(pkt.SaveRevision);
+                    break;
+
+                case SessionSignalKind.LevelBattleRelease:
+                    LevelStartSync.HandleRemoteLevelBattleRelease(pkt.SaveRevision, pkt.UtcReleaseTicks);
+                    break;
+
+                case SessionSignalKind.LevelIntroReady:
+                    LevelStartSync.HandleRemoteLevelIntroReady(pkt.SaveRevision);
+                    break;
+
+                case SessionSignalKind.LevelIntroRelease:
+                    LevelStartSync.HandleRemoteLevelIntroRelease(pkt.SaveRevision, pkt.UtcReleaseTicks);
                     break;
             }
         }
@@ -1439,7 +1455,7 @@ namespace CupheadOnline.Sync
             byte flags = 0;
             if (_hasTrackedSave) flags |= 1;
             if (Level.Current != null) flags |= 2;
-            if (IsBattleTimerPaused()) flags |= 4;
+            if (PauseManager.state == PauseManager.State.Paused) flags |= 4;
             return flags;
         }
 

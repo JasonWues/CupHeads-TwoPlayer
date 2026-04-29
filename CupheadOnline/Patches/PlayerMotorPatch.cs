@@ -38,11 +38,23 @@ namespace CupheadOnline.Patches
             {
                 RemoteInputDriver.Tick(player.id);
 
+                if (player.id <= PlayerId.PlayerTwo
+                 && HighLatencyInputSync.ShouldSimulateBuiltInRemotePlayers())
+                {
+                    return true;
+                }
+
                 // The host simulates the guest with the real gameplay motor.
                 if (MultiplayerSession.IsHost && player.id <= PlayerId.PlayerTwo)
                     return true;
 
                 ApplyRemoteState(__instance, (byte)player.id);
+                return false;
+            }
+
+            if (HighLatencyInputSync.ShouldUseHostAuthorityForLocalBuiltInPlayer(player.id))
+            {
+                RemotePlayer.TryApplyLocalAuthoritySnapshot(player.id);
                 return false;
             }
 
@@ -62,18 +74,21 @@ namespace CupheadOnline.Patches
                 return;
 
             bool authoritativeBuiltIn = MultiplayerSession.IsHost && player.id <= PlayerId.PlayerTwo;
-            if (!authoritativeBuiltIn && !MultiplayerSession.IsLocalPlayer(player.id))
+            bool localPlayer = MultiplayerSession.IsLocalPlayer(player.id);
+            if (!authoritativeBuiltIn && !localPlayer)
                 return;
 
             var pkt = BuildStatePacket(player, __instance);
 
             if (authoritativeBuiltIn)
                 Plugin.Net.SendPlayerState(ref pkt);
-            else
+            else if (localPlayer)
             {
                 SendInputFrameAndState(__instance, player, ref pkt);
                 if (MultiplayerSession.IsClient && MultiplayerSession.IsLocalPlayer(player.id))
+                {
                     ApplyAuthoritativeCorrection(__instance, player.id);
+                }
             }
         }
 
@@ -257,6 +272,13 @@ namespace CupheadOnline.Patches
                 return false;
             }
 
+            float delayed;
+            if (HighLatencyInputSync.TryGetDelayedAxis(__instance.playerId, axis == PlayerInput.Axis.X ? 0 : 1, out delayed))
+            {
+                __result = delayed;
+                return false;
+            }
+
             if (!MultiplayerSession.IsActive)
                 return true;
             if (!MultiplayerSession.IsNetworkControlledPlayer(__instance.playerId))
@@ -283,6 +305,13 @@ namespace CupheadOnline.Patches
             if (LocalDevE2ETest.TryGetLocalAxis(__instance.playerId, axis == PlayerInput.Axis.X ? 0 : 1, out scripted))
             {
                 __result = scripted > 0.38f ? 1 : scripted < -0.38f ? -1 : 0;
+                return false;
+            }
+
+            float delayed;
+            if (HighLatencyInputSync.TryGetDelayedAxis(__instance.playerId, axis == PlayerInput.Axis.X ? 0 : 1, out delayed))
+            {
+                __result = delayed > 0.38f ? 1 : delayed < -0.38f ? -1 : 0;
                 return false;
             }
 
@@ -316,6 +345,13 @@ namespace CupheadOnline.Patches
                 return false;
             }
 
+            bool delayed;
+            if (HighLatencyInputSync.TryGetDelayedButton(__instance.playerId, (int)button, false, false, out delayed))
+            {
+                __result = delayed;
+                return false;
+            }
+
             if (!MultiplayerSession.IsActive)
                 return true;
             if (!MultiplayerSession.IsNetworkControlledPlayer(__instance.playerId))
@@ -345,6 +381,13 @@ namespace CupheadOnline.Patches
                 return false;
             }
 
+            bool delayed;
+            if (HighLatencyInputSync.TryGetDelayedButton(__instance.playerId, (int)button, true, false, out delayed))
+            {
+                __result = delayed;
+                return false;
+            }
+
             if (!MultiplayerSession.IsActive)
                 return true;
             if (!MultiplayerSession.IsNetworkControlledPlayer(__instance.playerId))
@@ -364,6 +407,13 @@ namespace CupheadOnline.Patches
             if (LocalDevE2ETest.TryGetLocalButton(__instance.playerId, (int)button, false, true, out scripted))
             {
                 __result = scripted;
+                return false;
+            }
+
+            bool delayed;
+            if (HighLatencyInputSync.TryGetDelayedButton(__instance.playerId, (int)button, false, true, out delayed))
+            {
+                __result = delayed;
                 return false;
             }
 

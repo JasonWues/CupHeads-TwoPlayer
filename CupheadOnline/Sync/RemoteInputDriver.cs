@@ -13,11 +13,14 @@ namespace CupheadOnline.Sync
     {
         sealed class RemoteInputState
         {
+            public readonly List<DelayedInputFrame> Delayed = new List<DelayedInputFrame>(MaxDelayedFrames);
             public InputFramePacket Current;
             public InputFramePacket Previous;
             public bool HasData;
             public bool HasReceivedTick;
             public uint LastReceivedTick;
+            public bool HasPromotedTick;
+            public uint LastPromotedTick;
             public int StallFrames;
             public uint DownEdges;
             public uint UpEdges;
@@ -25,8 +28,15 @@ namespace CupheadOnline.Sync
             public readonly int[] UpServedFrames = CreateServedFrameBuffer();
         }
 
+        struct DelayedInputFrame
+        {
+            public InputFramePacket Packet;
+            public float DueAt;
+        }
+
         const int MinStallFrames = 18; // ~300 ms at 60 Hz before inputs are released on low-latency links.
         const int MaxStallFrames = 90; // Keep stale controls bounded even on poor Steam relay routes.
+        const int MaxDelayedFrames = 2048;
 
         static readonly Dictionary<byte, RemoteInputState> _states =
             new Dictionary<byte, RemoteInputState>(2);
@@ -43,7 +53,16 @@ namespace CupheadOnline.Sync
 
         public static void Apply(byte participantId, InputFramePacket pkt)
         {
+            if (HighLatencyInputSync.ShouldDropUntimedNetworkGameplayInput(participantId, pkt))
+                return;
+
             var state = GetOrCreateState(participantId);
+
+            if (ShouldDelayRemoteInput(participantId, pkt))
+            {
+                ApplyDelayed(state, pkt);
+                return;
+            }
 
             if (state.HasReceivedTick)
             {
@@ -54,17 +73,11 @@ namespace CupheadOnline.Sync
                     return;
             }
 
-            if (state.HasData)
-                state.Previous = state.Current;
-            else if (!state.HasReceivedTick)
-                state.Previous = default(InputFramePacket);
-
-            state.Current = pkt;
-            state.HasData = true;
             state.HasReceivedTick = true;
             state.LastReceivedTick = pkt.Tick;
             state.StallFrames = 0;
-            RecomputeEdges(state);
+
+            PromoteCurrent(state, pkt, false);
         }
 
         public static void Apply(PlayerId playerId, InputFramePacket pkt)
@@ -86,10 +99,14 @@ namespace CupheadOnline.Sync
         public static bool TryGetCurrent(byte participantId, out InputFramePacket pkt)
         {
             RemoteInputState state;
-            if (_states.TryGetValue(participantId, out state) && state.HasData)
+            if (_states.TryGetValue(participantId, out state))
             {
-                pkt = state.Current;
-                return true;
+                AdvanceDelayed(state);
+                if (state.HasData)
+                {
+                    pkt = state.Current;
+                    return true;
+                }
             }
 
             pkt = default(InputFramePacket);
@@ -99,16 +116,41 @@ namespace CupheadOnline.Sync
         public static bool WasPressedThisFrame(byte participantId, CupheadButton button)
         {
             RemoteInputState state;
-            if (!_states.TryGetValue(participantId, out state) || !state.HasData)
+            if (!_states.TryGetValue(participantId, out state))
+                return false;
+
+            AdvanceDelayed(state);
+            if (!state.HasData)
                 return false;
 
             return ConsumeEdgeForFrame(state.DownEdges, state.DownServedFrames, button);
         }
 
+        public static bool PeekPressedThisFrame(byte participantId, CupheadButton button)
+        {
+            RemoteInputState state;
+            if (!_states.TryGetValue(participantId, out state))
+                return false;
+
+            AdvanceDelayed(state);
+            if (!state.HasData)
+                return false;
+
+            int buttonIndex = (int)button;
+            if (buttonIndex < 0 || buttonIndex >= 32)
+                return false;
+
+            return (state.DownEdges & (1u << buttonIndex)) != 0u;
+        }
+
         public static bool WasReleasedThisFrame(byte participantId, CupheadButton button)
         {
             RemoteInputState state;
-            if (!_states.TryGetValue(participantId, out state) || !state.HasData)
+            if (!_states.TryGetValue(participantId, out state))
+                return false;
+
+            AdvanceDelayed(state);
+            if (!state.HasData)
                 return false;
 
             return ConsumeEdgeForFrame(state.UpEdges, state.UpServedFrames, button);
@@ -117,9 +159,11 @@ namespace CupheadOnline.Sync
         public static bool IsPressed(byte participantId, CupheadButton button)
         {
             RemoteInputState state;
-            return _states.TryGetValue(participantId, out state)
-                && state.HasData
-                && state.Current.IsPressed(button);
+            if (!_states.TryGetValue(participantId, out state))
+                return false;
+
+            AdvanceDelayed(state);
+            return state.HasData && state.Current.IsPressed(button);
         }
 
         /// <summary>Called each FixedUpdate by PlayerMotorPatch to age the input.</summary>
@@ -131,7 +175,13 @@ namespace CupheadOnline.Sync
         public static void Tick(byte participantId)
         {
             RemoteInputState state;
-            if (!_states.TryGetValue(participantId, out state) || !state.HasData)
+            if (!_states.TryGetValue(participantId, out state))
+                return;
+
+            AdvanceDelayed(state);
+            if (state.Delayed.Count > 0)
+                return;
+            if (!state.HasData)
                 return;
 
             state.StallFrames++;
@@ -143,6 +193,7 @@ namespace CupheadOnline.Sync
                 state.HasData = false;
                 state.DownEdges = 0u;
                 state.UpEdges = 0u;
+                state.Delayed.Clear();
                 ResetServedFrames(state.DownServedFrames);
                 ResetServedFrames(state.UpServedFrames);
             }
@@ -179,6 +230,103 @@ namespace CupheadOnline.Sync
             return state;
         }
 
+        static bool ShouldDelayRemoteInput(byte participantId, InputFramePacket pkt)
+        {
+            if (pkt.InputTime < 0f)
+                return false;
+            if (!HighLatencyInputSync.ShouldDelayNetworkGameplayInput(participantId))
+                return false;
+
+            return true;
+        }
+
+        static void ApplyDelayed(RemoteInputState state, InputFramePacket pkt)
+        {
+            if (state.HasPromotedTick)
+            {
+                if (pkt.Tick == state.LastPromotedTick)
+                    return;
+
+                if (!NetTick.IsNewer(pkt.Tick, state.LastPromotedTick))
+                    return;
+            }
+
+            if (ContainsDelayedTick(state, pkt.Tick))
+                return;
+
+            if (!state.HasReceivedTick || NetTick.IsNewer(pkt.Tick, state.LastReceivedTick))
+            {
+                state.HasReceivedTick = true;
+                state.LastReceivedTick = pkt.Tick;
+            }
+            state.StallFrames = 0;
+
+            InsertDelayedSorted(state, new DelayedInputFrame
+            {
+                Packet = pkt,
+                DueAt = HighLatencyInputSync.GetDueTime(pkt),
+            });
+
+            while (state.Delayed.Count > MaxDelayedFrames)
+                state.Delayed.RemoveAt(0);
+
+            AdvanceDelayed(state);
+        }
+
+        static void AdvanceDelayed(RemoteInputState state)
+        {
+            if (state == null || state.Delayed.Count == 0)
+                return;
+
+            float now = HighLatencyInputSync.PlayoutTimeNow();
+            bool promotedAny = false;
+            while (state.Delayed.Count > 0)
+            {
+                var next = state.Delayed[0];
+                if (next.DueAt > now)
+                    break;
+
+                if (!promotedAny)
+                {
+                    state.DownEdges = 0u;
+                    state.UpEdges = 0u;
+                    ResetServedFrames(state.DownServedFrames);
+                    ResetServedFrames(state.UpServedFrames);
+                }
+
+                state.Delayed.RemoveAt(0);
+                if (state.HasPromotedTick
+                 && (next.Packet.Tick == state.LastPromotedTick
+                    || !NetTick.IsNewer(next.Packet.Tick, state.LastPromotedTick)))
+                {
+                    continue;
+                }
+
+                PromoteCurrent(state, next.Packet, true);
+                promotedAny = true;
+            }
+        }
+
+        static void PromoteCurrent(RemoteInputState state, InputFramePacket pkt, bool accumulateEdges)
+        {
+            var previous = state.HasData ? state.Current : default(InputFramePacket);
+            state.Previous = previous;
+            state.Current = pkt;
+            state.HasData = true;
+            state.StallFrames = 0;
+            state.HasPromotedTick = true;
+            state.LastPromotedTick = pkt.Tick;
+
+            if (accumulateEdges)
+            {
+                state.DownEdges |= state.Current.Buttons & ~previous.Buttons;
+                state.UpEdges |= previous.Buttons & ~state.Current.Buttons;
+                return;
+            }
+
+            RecomputeEdges(state);
+        }
+
         static int ComputeMaxStallFrames()
         {
             int latencyMs = 0;
@@ -204,6 +352,34 @@ namespace CupheadOnline.Sync
             state.UpEdges = state.Previous.Buttons & ~state.Current.Buttons;
             ResetServedFrames(state.DownServedFrames);
             ResetServedFrames(state.UpServedFrames);
+        }
+
+        static bool ContainsDelayedTick(RemoteInputState state, uint tick)
+        {
+            for (int i = 0; i < state.Delayed.Count; i++)
+            {
+                if (state.Delayed[i].Packet.Tick == tick)
+                    return true;
+            }
+
+            return false;
+        }
+
+        static void InsertDelayedSorted(RemoteInputState state, DelayedInputFrame frame)
+        {
+            int index = state.Delayed.Count;
+            while (index > 0)
+            {
+                var existing = state.Delayed[index - 1];
+                if (existing.DueAt < frame.DueAt)
+                    break;
+                if (Mathf.Abs(existing.DueAt - frame.DueAt) <= 0.0001f
+                 && !NetTick.IsNewer(existing.Packet.Tick, frame.Packet.Tick))
+                    break;
+                index--;
+            }
+
+            state.Delayed.Insert(index, frame);
         }
 
         static bool ConsumeEdgeForFrame(uint edges, int[] servedFrames, CupheadButton button)

@@ -42,6 +42,8 @@ namespace CupheadOnline.Sync
 
         static void Apply(PlayerStatusPacket pkt, bool fromRemote)
         {
+            if (ParticipantReviveController.ShouldSuppressRecentBuiltInReviveDeath(pkt, fromRemote))
+                return;
             if (ShouldIgnoreRemoteBuiltInStatus(pkt, fromRemote))
                 return;
             if (ShouldIgnoreRemoteBuiltInStatusDuringClientLevelStart(pkt, fromRemote))
@@ -259,6 +261,8 @@ namespace CupheadOnline.Sync
         {
             PlayerStatusPacket pkt;
             if (!TryBuildLocalPacket(player, out pkt))
+                return;
+            if (ParticipantReviveController.ShouldSuppressRecentBuiltInReviveDeath(pkt, fromRemote: false))
                 return;
 
             Apply(pkt, fromRemote: false);
