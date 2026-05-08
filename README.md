@@ -1,4 +1,4 @@
-# CupHeads
+# CupHeads Work In Progress
 
 Steam P2P multiplayer for Cuphead, focused on a more stable two-player online co-op path, plus a desktop installer that handles the mod setup for you.
 
