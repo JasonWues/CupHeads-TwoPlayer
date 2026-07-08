@@ -57,13 +57,13 @@ namespace CupheadOnline.UI
             _canvasGroup.interactable = false;
             _canvasGroup.blocksRaycasts = false;
 
-            _title = MakeText(panel, "SESSION PANEL", 17, TitleColour, new Vector2(0f, 86f), new Vector2(380f, 24f), TextAnchor.MiddleCenter);
+            _title = MakeText(panel, Loc.T("SESSION PANEL"), 17, TitleColour, new Vector2(0f, 86f), new Vector2(380f, 24f), TextAnchor.MiddleCenter);
             _body = MakeText(panel, string.Empty, 12, BodyColour, new Vector2(0f, -4f), new Vector2(380f, 156f), TextAnchor.UpperLeft);
             _body.horizontalOverflow = HorizontalWrapMode.Wrap;
             _body.verticalOverflow = VerticalWrapMode.Overflow;
             _body.lineSpacing = 1.1f;
 
-            _hint = MakeText(panel, "[ F8 toggles this panel ]", 10, HintColour, new Vector2(0f, -92f), new Vector2(380f, 20f), TextAnchor.MiddleCenter);
+            _hint = MakeText(panel, Loc.T("[ F8 toggles this panel ]"), 10, HintColour, new Vector2(0f, -92f), new Vector2(380f, 20f), TextAnchor.MiddleCenter);
         }
 
         private void Update()
@@ -119,6 +119,7 @@ namespace CupheadOnline.UI
             text.fontSize = size;
             text.color = color;
             text.alignment = anchor;
+            Loc.EnsureCjkFont(text);
             return text;
         }
     }

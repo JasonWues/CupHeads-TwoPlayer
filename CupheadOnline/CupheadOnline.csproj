@@ -15,7 +15,7 @@
         $env:CUPHEAD_PATH = "D:\Games\Cuphead"
     -->
     <GameDir Condition="'$(CUPHEAD_PATH)' != ''">$(CUPHEAD_PATH)</GameDir>
-    <GameDir Condition="'$(GameDir)' == ''">H:\SteamLibrary\steamapps\common\Cuphead</GameDir>
+    <GameDir Condition="'$(GameDir)' == ''">C:\Software\Steam\steamapps\common\Cuphead</GameDir>
     <BepInExDir>$(GameDir)\BepInEx</BepInExDir>
     <ManagedDir>$(GameDir)\Cuphead_Data\Managed</ManagedDir>
   </PropertyGroup>
@@ -64,6 +64,10 @@
     </Reference>
     <Reference Include="Assembly-CSharp-firstpass">
       <HintPath>$(ManagedDir)\Assembly-CSharp-firstpass.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Rewired_Core">
+      <HintPath>$(ManagedDir)\Rewired_Core.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="UnityEngine.UIModule">

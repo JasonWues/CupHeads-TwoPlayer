@@ -206,10 +206,10 @@ namespace CupheadOnline.UI
             _canvasGroup.blocksRaycasts = false;
             _canvasGroup.alpha = 1f;
 
-            _title = MakeText(panel, "BATTLE ASSIST", 13, TitleColour, new Vector2(14f, -12f), new Vector2(300f, 20f), TextAnchor.MiddleLeft);
+            _title = MakeText(panel, Loc.T("BATTLE ASSIST"), 13, TitleColour, new Vector2(14f, -12f), new Vector2(300f, 20f), TextAnchor.MiddleLeft);
             _body = MakeText(panel, string.Empty, 11, BodyColour, new Vector2(14f, -38f), new Vector2(302f, 54f), TextAnchor.UpperLeft);
             _body.horizontalOverflow = HorizontalWrapMode.Wrap;
-            _hint = MakeText(panel, "F6 RESYNC  F7 BARS  F9 COPY DIAG  F10 HIDE", 9, HintColour, new Vector2(14f, -96f), new Vector2(302f, 18f), TextAnchor.MiddleLeft);
+            _hint = MakeText(panel, Loc.T("F6 RESYNC  F7 BARS  F9 COPY DIAG  F10 HIDE"), 9, HintColour, new Vector2(14f, -96f), new Vector2(302f, 18f), TextAnchor.MiddleLeft);
         }
 
         private void OnDestroy()
@@ -223,7 +223,7 @@ namespace CupheadOnline.UI
             if (_canvasGroup != null)
                 _canvasGroup.alpha = Plugin.ShowBattleAssistHud ? 1f : 0f;
 
-            string title = "BATTLE ASSIST";
+            string title = Loc.T("BATTLE ASSIST");
             if (Level.Current != null)
                 title = CleanLevelName(Level.Current.CurrentLevel.ToString());
             if (_title != null && _title.text != title)
@@ -248,21 +248,21 @@ namespace CupheadOnline.UI
                 displayParries = syncedParries;
             }
 
-            string timeLine = "TIME " + FormatTime(localElapsed);
+            string timeLine = Loc.T("TIME ") + FormatTime(localElapsed);
             if (SessionSync.TryGetBattleAssistTiming(out localElapsed, out hostElapsed, out localMinusHost))
             {
                 timeLine = MultiplayerSession.IsHost
-                    ? "TIME LOCAL/HOST " + FormatTime(localElapsed)
-                    : "TIME LOCAL " + FormatTime(localElapsed)
+                    ? Loc.T("TIME LOCAL/HOST ") + FormatTime(localElapsed)
+                    : Loc.T("TIME LOCAL ") + FormatTime(localElapsed)
                         + Environment.NewLine
-                        + "HOST " + FormatTime(hostElapsed) + "   OFFSET " + FormatSignedSeconds(localMinusHost) + "s";
+                        + Loc.T("HOST ") + FormatTime(hostElapsed) + Loc.T("   OFFSET ") + FormatSignedSeconds(localMinusHost) + "s";
             }
 
             string body = timeLine
                 + Environment.NewLine
-                + "DEATHS " + displayDeaths
-                + "   RETRIES " + displayRetries
-                + "   PARRIES " + displayParries;
+                + Loc.T("DEATHS ") + displayDeaths
+                + Loc.T("   RETRIES ") + displayRetries
+                + Loc.T("   PARRIES ") + displayParries;
 
             if (Plugin.BossHpScalingEnabled && BossHealthScaler.CurrentMultiplier > 1.0001f)
                 body += "   HP x" + BossHealthScaler.CurrentMultiplier.ToString("0.00");
@@ -380,6 +380,7 @@ namespace CupheadOnline.UI
             text.fontSize = size;
             text.color = color;
             text.alignment = anchor;
+            Loc.EnsureCjkFont(text);
             return text;
         }
 
@@ -400,7 +401,7 @@ namespace CupheadOnline.UI
         private static string CleanLevelName(string value)
         {
             if (string.IsNullOrEmpty(value))
-                return "BATTLE ASSIST";
+                return Loc.T("BATTLE ASSIST");
 
             string text = value.Replace("level_", string.Empty)
                 .Replace("scene_", string.Empty)

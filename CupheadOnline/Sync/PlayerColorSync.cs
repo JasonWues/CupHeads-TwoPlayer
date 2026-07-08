@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
+using CupheadOnline.UI;
 
 namespace CupheadOnline.Sync
 {
@@ -162,7 +163,7 @@ namespace CupheadOnline.Sync
 
         public static string BuildLocalMenuLabel()
         {
-            return "PLAYER COLOR";
+            return Loc.T("PLAYER COLOR");
         }
 
         public static string BuildColorLineLabel(string prefix, int selection, string suffix)
@@ -173,7 +174,7 @@ namespace CupheadOnline.Sync
         public static string GetSelectionName(int selection)
         {
             int normalized = NormalizeSelection(selection);
-            return Palette[normalized].Name;
+            return Loc.T(Palette[normalized].Name);
         }
 
         public static Color GetPaletteColor(int selection)
@@ -186,23 +187,23 @@ namespace CupheadOnline.Sync
             switch (NormalizeSelection(selection))
             {
                 case 0:
-                    return "Classic for the first two gameplay slots, stable unique colors for extra players.";
+                    return Loc.T("Classic for the first two gameplay slots, stable unique colors for extra players.");
                 case 1:
-                    return "Keep the vanilla look with no runtime tint.";
+                    return Loc.T("Keep the vanilla look with no runtime tint.");
                 case 2:
-                    return "Bright teal tint for clean readability.";
+                    return Loc.T("Bright teal tint for clean readability.");
                 case 3:
-                    return "Warm coral tint that stands out in motion.";
+                    return Loc.T("Warm coral tint that stands out in motion.");
                 case 4:
-                    return "Golden amber tint with a classic arcade feel.";
+                    return Loc.T("Golden amber tint with a classic arcade feel.");
                 case 5:
-                    return "Soft mint tint for a lighter look.";
+                    return Loc.T("Soft mint tint for a lighter look.");
                 case 6:
-                    return "Violet tint for high contrast in crowded runs.";
+                    return Loc.T("Violet tint for high contrast in crowded runs.");
                 case 7:
-                    return "Lime tint for the strongest map-side visibility.";
+                    return Loc.T("Lime tint for the strongest map-side visibility.");
                 default:
-                    return "Runtime tint applied without editing sprite files.";
+                    return Loc.T("Runtime tint applied without editing sprite files.");
             }
         }
 

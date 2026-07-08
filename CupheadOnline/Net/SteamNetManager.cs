@@ -121,7 +121,7 @@ namespace CupheadOnline.Net
 
             CSteamID localId = SteamUser.GetSteamID();
             var sb = new System.Text.StringBuilder();
-            sb.AppendLine("LOBBY #" + _lobbyId.m_SteamID);
+            sb.AppendLine(Loc.T("LOBBY #") + _lobbyId.m_SteamID);
             for (int i = 0; i < n; i++)
             {
                 CSteamID member = SteamMatchmaking.GetLobbyMemberByIndex(_lobbyId, i);
@@ -224,17 +224,17 @@ namespace CupheadOnline.Net
             }
             if (!_isHost || _lobbyId == CSteamID.Nil)
             {
-                status = "Host a lobby first, then invite a friend.";
+                status = Loc.T("Host a lobby first, then invite a friend.");
                 return false;
             }
             if (!IsOverlayEnabled())
             {
-                status = "Steam overlay is unavailable.\nEnable the overlay and try again.";
+                status = Loc.T("Steam overlay is unavailable.\nEnable the overlay and try again.");
                 return false;
             }
 
             SteamFriends.ActivateGameOverlayInviteDialog(_lobbyId);
-            status = "Invite dialog opened for lobby #" + _lobbyId.m_SteamID + ".";
+            status = Loc.F("Invite dialog opened for lobby #{0}.", _lobbyId.m_SteamID);
             Plugin.LogVerbose("[SteamNet] Invite dialog opened.");
             return true;
         }
@@ -255,12 +255,12 @@ namespace CupheadOnline.Net
             }
             if (!IsOverlayEnabled())
             {
-                status = "Steam overlay is unavailable.\nEnable the overlay and try again.";
+                status = Loc.T("Steam overlay is unavailable.\nEnable the overlay and try again.");
                 return false;
             }
 
             SteamFriends.ActivateGameOverlay("Friends");
-            status = "Steam overlay opened.\nWaiting for invite...";
+            status = Loc.T("Steam overlay opened.\nWaiting for invite...");
             Plugin.LogVerbose("[SteamNet] Friends overlay opened.");
             return true;
         }
@@ -284,7 +284,7 @@ namespace CupheadOnline.Net
                     }
                     if (StartHost())
                     {
-                        status = "Retrying host setup...";
+                        status = Loc.T("Retrying host setup...");
                         return true;
                     }
                     status = _steamUnavailableStatus;
@@ -303,19 +303,19 @@ namespace CupheadOnline.Net
                     }
                     if (_lastRetryLobbyId == CSteamID.Nil)
                     {
-                    status = "No previous lobby is available to rejoin yet.";
+                    status = Loc.T("No previous lobby is available to rejoin yet.");
                     return false;
                     }
                     if (JoinLobby(_lastRetryLobbyId))
                     {
-                        status = "Retrying lobby join...";
+                        status = Loc.T("Retrying lobby join...");
                         return true;
                     }
                     status = _steamUnavailableStatus;
                     return false;
 
                 default:
-                    status = "No previous action is available to retry.";
+                    status = Loc.T("No previous action is available to retry.");
                     return false;
             }
         }
@@ -347,13 +347,13 @@ namespace CupheadOnline.Net
             CSteamID lobbyId;
             if (!TryParseLobbyId(rawLobbyId, out lobbyId))
             {
-                status = "No Steam lobby ID was found in the clipboard.";
+                status = Loc.T("No Steam lobby ID was found in the clipboard.");
                 return false;
             }
 
             if (JoinLobby(lobbyId))
             {
-                status = "Joining lobby #" + lobbyId.m_SteamID + "...";
+                status = Loc.F("Joining lobby #{0}...", lobbyId.m_SteamID);
                 return true;
             }
 
@@ -378,12 +378,12 @@ namespace CupheadOnline.Net
             }
             if (_lobbyId == CSteamID.Nil)
             {
-                status = "Host or join a lobby first.";
+                status = Loc.T("Host or join a lobby first.");
                 return false;
             }
 
             GUIUtility.systemCopyBuffer = "Lobby ID: " + _lobbyId.m_SteamID;
-            status = "Lobby ID copied to clipboard.";
+            status = Loc.T("Lobby ID copied to clipboard.");
             return true;
         }
 
@@ -397,7 +397,7 @@ namespace CupheadOnline.Net
             }
             if (_state != NetState.Connected)
             {
-                status = "Connect first before requesting a resync.";
+                status = Loc.T("Connect first before requesting a resync.");
                 return false;
             }
 
@@ -532,7 +532,7 @@ namespace CupheadOnline.Net
         bool     _pingSentPending;
         bool     _steamInitAttempted;
         bool     _steamReady;
-        string   _steamUnavailableStatus = "Steam is unavailable.\nLaunch Cuphead through Steam.";
+        string   _steamUnavailableStatus = Loc.T("Steam is unavailable.\nLaunch Cuphead through Steam.");
         string   _lastStatusMessage;
         string   _lastFailureReason;
         bool     _autoReportSessionArmed;
@@ -764,7 +764,7 @@ namespace CupheadOnline.Net
             SteamNetworking.AllowP2PPacketRelay(true);
             MultiplayerSession.StartAsHost();
 
-            SetState(NetState.CreatingLobby, "Creating lobby...");
+            SetState(NetState.CreatingLobby, Loc.T("Creating lobby..."));
             _crLobbyCreated = CallResult<LobbyCreated_t>.Create(OnLobbyCreated);
             _crLobbyCreated.Set(SteamMatchmaking.CreateLobby(ELobbyType.k_ELobbyTypeFriendsOnly, MAX_LOBBY_MEMBERS));
             return true;
@@ -789,9 +789,7 @@ namespace CupheadOnline.Net
             RefreshHostLobbyRoster();
 
             string waitStatus =
-                "Waiting for a gameplay peer...\n"
-                + "Extra lobby members will queue automatically.\n"
-                + "Use Invite Friend to send another Steam invite.";
+                Loc.T("Waiting for a gameplay peer...\nExtra lobby members will queue automatically.\nUse Invite Friend to send another Steam invite.");
             string copyStatus;
             if (TryCopyLobbyId(out copyStatus))
                 waitStatus += "\n" + copyStatus;
@@ -823,7 +821,7 @@ namespace CupheadOnline.Net
                     _peerId = req.m_steamIDRemote;
                     UpdateHostPeerStage(req.m_steamIDRemote, HostPeerStage.WaitingHello);
                     UpdateLobbyActivePeerData();
-                    SetState(NetState.WaitingHello, "Player connecting...");
+                    SetState(NetState.WaitingHello, Loc.T("Player connecting..."));
                 }
                 else if (req.m_steamIDRemote != _peerId)
                 {
@@ -855,7 +853,7 @@ namespace CupheadOnline.Net
             _isHost = false;
             _nextQueuePollTime = 0f;
             SteamNetworking.AllowP2PPacketRelay(true);
-            SetState(NetState.JoiningLobby, "Joining lobby #" + lobbyId.m_SteamID + "...");
+            SetState(NetState.JoiningLobby, Loc.F("Joining lobby #{0}...", lobbyId.m_SteamID));
             _crLobbyEntered = CallResult<LobbyEnter_t>.Create(OnLobbyEntered);
             _crLobbyEntered.Set(SteamMatchmaking.JoinLobby(lobbyId));
             return true;
@@ -904,9 +902,9 @@ namespace CupheadOnline.Net
             UpdateHostPeerStage(sender, HostPeerStage.WaitingReady);
             RawSendTo(sender, new[] { (byte)PacketType.Welcome }, reliable: true);
             if (sender == _peerId && _state != NetState.Connected)
-                SetState(NetState.WaitingReady, "Almost there\u2026");
+                SetState(NetState.WaitingReady, Loc.T("Almost there\u2026"));
             else if (_state == NetState.Connected)
-                FireStatus("Additional participant authorizing...");
+                FireStatus(Loc.T("Additional participant authorizing..."));
             Plugin.Log.LogInfo("[SteamNet] Hello received from " + FriendName(sender) + ", Welcome sent.");
         }
 
@@ -962,10 +960,10 @@ namespace CupheadOnline.Net
             SetState(
                 NetState.Connected,
                 _isHost
-                    ? "Participant connected.\nSelect OPEN SAVE SLOT to choose a file."
-                    : "Connected.\nWaiting for the host to choose a save slot.");
+                    ? Loc.T("Participant connected.\nSelect OPEN SAVE SLOT to choose a file.")
+                    : Loc.T("Connected.\nWaiting for the host to choose a save slot."));
 
-            ConnectionHUD.Show("Connected - " + (_isHost ? BuildCurrentPeerSummary() : name));
+            ConnectionHUD.Show(Loc.F("Connected - {0}", _isHost ? BuildCurrentPeerSummary() : name));
             SessionSync.OnConnected(_isHost);
 
             if (_isHost)
@@ -1079,7 +1077,7 @@ namespace CupheadOnline.Net
                 string name = FriendName(changed);
                 Plugin.Log.LogInfo("[SteamNet] " + name + " left the lobby.");
                 if (changed == _peerId)
-                    HandleDisconnect(name + " left the lobby.");
+                    HandleDisconnect(Loc.F("{0} left the lobby.", name));
                 else if (_isHost)
                     RemoveHostPeer(changed);
             });
@@ -1095,7 +1093,7 @@ namespace CupheadOnline.Net
         void HandleDisconnect(string reason)
         {
             bool wasConnected = _state == NetState.Connected;
-            string friendlyReason = string.IsNullOrEmpty(reason) ? "Connection closed." : reason;
+            string friendlyReason = string.IsNullOrEmpty(reason) ? Loc.T("Connection closed.") : reason;
             _lastFailureReason = friendlyReason;
             _lastDisconnectWasConnected = wasConnected;
             CSteamID oldPeer = _peerId;
@@ -1147,14 +1145,13 @@ namespace CupheadOnline.Net
                     _hostPeers.Clear();
                 }
                 SetState(NetState.WaitingInLobby,
-                    friendlyReason + "\n\nWaiting for the next gameplay peer...\n"
-                    + "Extra lobby members will queue automatically.");
+                    friendlyReason + "\n\n" + Loc.T("Waiting for the next gameplay peer...\nExtra lobby members will queue automatically."));
                 if (wasConnected) ConnectionHUD.ShowDisconnected(friendlyReason);
             }
             else
             {
                 SetState(NetState.Error,
-                    friendlyReason + "\n\nUse Retry Last or Join Game to try again.");
+                    friendlyReason + "\n\n" + Loc.T("Use Retry Last or Join Game to try again."));
                 if (wasConnected) ConnectionHUD.ShowDisconnected(friendlyReason);
             }
         }
@@ -1204,7 +1201,7 @@ namespace CupheadOnline.Net
                     {
                         MultiplayerSession.End();
                         SetState(NetState.Error,
-                            "Steam took too long to create the lobby.\nUse Retry Last or Host Game to try again.");
+                            Loc.T("Steam took too long to create the lobby.\nUse Retry Last or Host Game to try again."));
                     }
                     return;
 
@@ -1213,7 +1210,7 @@ namespace CupheadOnline.Net
                     {
                         MultiplayerSession.End();
                         SetState(NetState.Error,
-                            "Steam took too long to join the lobby.\nUse Retry Last or Join Game to try again.");
+                            Loc.T("Steam took too long to join the lobby.\nUse Retry Last or Join Game to try again."));
                     }
                     return;
 
@@ -1221,7 +1218,7 @@ namespace CupheadOnline.Net
                 case NetState.WaitingWelcome:
                 case NetState.WaitingReady:
                     if (elapsed > HANDSHAKE_TIMEOUT)
-                        HandleDisconnect("The handshake with " + FriendName(_peerId) + " timed out.");
+                        HandleDisconnect(Loc.F("The handshake with {0} timed out.", FriendName(_peerId)));
                     return;
 
                 case NetState.WaitingInLobby:
@@ -1231,7 +1228,7 @@ namespace CupheadOnline.Net
             // Connected: keepalive + peer timeout check
             if ((DateTime.UtcNow - _lastReceive).TotalMilliseconds > PEER_TIMEOUT_MS)
             {
-                HandleDisconnect(FriendName(_peerId) + " stopped responding.");
+                HandleDisconnect(Loc.F("{0} stopped responding.", FriendName(_peerId)));
                 return;
             }
 
@@ -1640,7 +1637,7 @@ namespace CupheadOnline.Net
             if (type == (byte)PacketType.Disconnect)
             {
                 if (sender == _peerId)
-                    HandleDisconnect(FriendName(sender) + " disconnected.");
+                    HandleDisconnect(Loc.F("{0} disconnected.", FriendName(sender)));
                 else if (_isHost)
                     RemoveHostPeer(sender);
                 return;
@@ -2071,8 +2068,8 @@ namespace CupheadOnline.Net
 
             if (_autoReportSessionArmed && wasConnected)
             {
-                _lastStatusMessage = "Session shut down locally.";
-                _lastFailureReason = "Session shut down locally.";
+                _lastStatusMessage = Loc.T("Session shut down locally.");
+                _lastFailureReason = Loc.T("Session shut down locally.");
                 TryAutoExportAndDisarm("Session shut down locally.");
             }
 
@@ -2270,7 +2267,7 @@ namespace CupheadOnline.Net
                 return false;
             }
 
-            SetState(NetState.WaitingWelcome, "Connecting to " + FriendName(_peerId) + "...");
+            SetState(NetState.WaitingWelcome, Loc.F("Connecting to {0}...", FriendName(_peerId)));
             RawSendTo(_peerId, new[] { (byte)PacketType.Hello }, reliable: true);
             Plugin.Log.LogInfo("[SteamNet] Hello sent to " + FriendName(_peerId));
             return true;
@@ -2278,7 +2275,7 @@ namespace CupheadOnline.Net
 
         string BuildWaitingForOpenSlotStatus(ulong activePeerValue)
         {
-            string activeName = "another player";
+            string activeName = Loc.T("another player");
             if (activePeerValue != 0UL)
             {
                 string resolved = FriendName(new CSteamID(activePeerValue));
@@ -2286,9 +2283,9 @@ namespace CupheadOnline.Net
                     activeName = resolved;
             }
 
-            return "Lobby joined.\n"
-                + activeName
-                + " is using the active gameplay slot.\nWaiting for the host to open the next slot...";
+            return Loc.F(
+                "Lobby joined.\n{0} is using the active gameplay slot.\nWaiting for the host to open the next slot...",
+                activeName);
         }
 
         bool TryGetActiveLobbyPeer(out ulong activePeerValue)
@@ -2320,9 +2317,9 @@ namespace CupheadOnline.Net
 
         string BuildLobbyPresenceLine(CSteamID member, CSteamID localId)
         {
-            string name = member == localId ? "You" : FriendName(member);
+            string name = member == localId ? Loc.T("You") : FriendName(member);
             if (string.IsNullOrEmpty(name))
-                name = "Unknown Player";
+                name = Loc.T("Unknown Player");
 
             byte participantId;
             bool hasParticipantId = TryGetLobbyMemberParticipantId(member, out participantId);
@@ -2343,13 +2340,13 @@ namespace CupheadOnline.Net
             if (member == localId)
             {
                 if (_isHost)
-                    return " (Host)";
+                    return Loc.T(" (Host)");
                 if (!_isHost && _state == NetState.WaitingInLobby)
-                    return " (Queued)";
+                    return Loc.T(" (Queued)");
                 if (!_isHost && _state == NetState.WaitingWelcome)
-                    return " (Connecting\u2026)";
+                    return Loc.T(" (Connecting\u2026)");
                 if (!_isHost && _state == NetState.Connected)
-                    return " (You)";
+                    return Loc.T(" (You)");
                 return string.Empty;
             }
 
@@ -2360,41 +2357,41 @@ namespace CupheadOnline.Net
                     return " (" + DescribeHostPeerStage(info) + ")";
 
                 if (member == _peerId && _state == NetState.Connected)
-                    return " (Active)";
+                    return Loc.T(" (Active)");
 
                 return string.Empty;
             }
 
             ulong activePeerValue;
             if (TryGetActiveLobbyPeer(out activePeerValue) && member.m_SteamID == activePeerValue)
-                return " (Active)";
+                return Loc.T(" (Active)");
 
             if (member == _peerId)
             {
                 if (_state == NetState.WaitingWelcome)
-                    return " (Connecting\u2026)";
+                    return Loc.T(" (Connecting\u2026)");
                 if (_state == NetState.Connected)
-                    return " (Host)";
+                    return Loc.T(" (Host)");
             }
 
-            return " (Queued)";
+            return Loc.T(" (Queued)");
         }
 
         string DescribeHostPeerStage(HostPeerInfo info)
         {
             if (info == null)
-                return "Unknown";
+                return Loc.T("Unknown");
 
             switch (info.Stage)
             {
                 case HostPeerStage.WaitingHello:
-                    return "Connecting";
+                    return Loc.T("Connecting");
                 case HostPeerStage.WaitingReady:
-                    return "Authorizing";
+                    return Loc.T("Authorizing");
                 case HostPeerStage.Connected:
-                    return info.SteamId == _peerId ? "Active" : "Connected";
+                    return info.SteamId == _peerId ? Loc.T("Active") : Loc.T("Connected");
                 default:
-                    return info.SteamId == _peerId ? "Connecting" : "Queued";
+                    return info.SteamId == _peerId ? Loc.T("Connecting") : Loc.T("Queued");
             }
         }
 
@@ -2436,34 +2433,34 @@ namespace CupheadOnline.Net
                 if (_peerId != CSteamID.Nil && (_state == NetState.WaitingHello || _state == NetState.WaitingReady))
                 {
                     if (PendingPeerCount > 1)
-                        return FriendName(_peerId) + " connecting, " + (PendingPeerCount - 1) + " queued";
-                    return FriendName(_peerId) + " connecting";
+                        return Loc.F("{0} connecting, {1} queued", FriendName(_peerId), PendingPeerCount - 1);
+                    return Loc.F("{0} connecting", FriendName(_peerId));
                 }
 
                 if (_peerId != CSteamID.Nil && _state == NetState.Connected)
                 {
                     int extraConnected = Mathf.Max(0, ConnectedPeerCount - 1);
                     if (extraConnected > 0 && PendingPeerCount > 0)
-                        return FriendName(_peerId) + " active, " + extraConnected + " extra connected, " + PendingPeerCount + " queued";
+                        return Loc.F("{0} active, {1} extra connected, {2} queued", FriendName(_peerId), extraConnected, PendingPeerCount);
                     if (extraConnected > 0)
-                        return FriendName(_peerId) + " active, " + extraConnected + " extra connected";
+                        return Loc.F("{0} active, {1} extra connected", FriendName(_peerId), extraConnected);
                     if (PendingPeerCount > 0)
-                        return FriendName(_peerId) + " active, " + PendingPeerCount + " queued";
-                    return FriendName(_peerId) + " active";
+                        return Loc.F("{0} active, {1} queued", FriendName(_peerId), PendingPeerCount);
+                    return Loc.F("{0} active", FriendName(_peerId));
                 }
 
                 if (PendingPeerCount > 0)
-                    return PendingPeerCount + " queued in lobby";
+                    return Loc.F("{0} queued in lobby", PendingPeerCount);
 
-                return "No gameplay peer connected";
+                return Loc.T("No gameplay peer connected");
             }
 
             if (_state == NetState.WaitingInLobby)
-                return "Queued for the next gameplay slot";
+                return Loc.T("Queued for the next gameplay slot");
             if (_state == NetState.WaitingWelcome)
-                return "Connecting to " + FriendName(_peerId);
+                return Loc.F("Connecting to {0}", FriendName(_peerId));
             if (_state == NetState.Connected)
-                return "Connected to " + FriendName(_peerId);
+                return Loc.F("Connected to {0}", FriendName(_peerId));
             return string.Empty;
         }
 
@@ -2797,7 +2794,7 @@ namespace CupheadOnline.Net
 
             string folder;
             if (BugReportExporter.TryAutoExport(reason, out folder) && !string.IsNullOrEmpty(folder))
-                ConnectionHUD.Show("CupHeads report saved");
+                ConnectionHUD.Show(Loc.T("CupHeads report saved"));
         }
 
         void LogPairEvent(string eventName, string detail)
@@ -2889,7 +2886,7 @@ namespace CupheadOnline.Net
 
         string BuildSteamUnavailableStatus()
         {
-            string status = "Steam is unavailable.\nLaunch Cuphead through Steam.";
+            string status = Loc.T("Steam is unavailable.\nLaunch Cuphead through Steam.");
 
             try
             {
@@ -2898,7 +2895,7 @@ namespace CupheadOnline.Net
                 {
                     string appIdPath = Path.Combine(gameRoot, "steam_appid.txt");
                     if (!File.Exists(appIdPath))
-                        status += "\nIf testing outside Steam, add steam_appid.txt next to Cuphead.exe.";
+                        status += "\n" + Loc.T("If testing outside Steam, add steam_appid.txt next to Cuphead.exe.");
                 }
             }
             catch
@@ -2943,41 +2940,41 @@ namespace CupheadOnline.Net
         string DescribeLobbyCreateFailure(EResult result, bool ioFail)
         {
             if (ioFail)
-                return "Steam could not create the lobby.\nCheck Steam and try again.";
+                return Loc.T("Steam could not create the lobby.\nCheck Steam and try again.");
 
             switch (result)
             {
                 case EResult.k_EResultNoConnection:
-                    return "Steam is offline.\nReconnect Steam and try again.";
+                    return Loc.T("Steam is offline.\nReconnect Steam and try again.");
                 case EResult.k_EResultTimeout:
-                    return "Steam timed out while creating the lobby.\nUse Retry Last.";
+                    return Loc.T("Steam timed out while creating the lobby.\nUse Retry Last.");
                 case EResult.k_EResultAccessDenied:
-                    return "Steam blocked lobby creation.\nCheck the overlay and privacy settings.";
+                    return Loc.T("Steam blocked lobby creation.\nCheck the overlay and privacy settings.");
                 default:
-                    return "Steam could not create the lobby (" + result + ").\nUse Retry Last or Host Game to try again.";
+                    return Loc.F("Steam could not create the lobby ({0}).\nUse Retry Last or Host Game to try again.", result);
             }
         }
 
         string DescribeLobbyJoinFailure(EChatRoomEnterResponse response, bool ioFail)
         {
             if (ioFail)
-                return "Steam could not join the lobby.\nCheck Steam and try again.";
+                return Loc.T("Steam could not join the lobby.\nCheck Steam and try again.");
 
             switch (response)
             {
                 case EChatRoomEnterResponse.k_EChatRoomEnterResponseDoesntExist:
-                    return "That Steam lobby no longer exists.\nAsk the host for a fresh invite.";
+                    return Loc.T("That Steam lobby no longer exists.\nAsk the host for a fresh invite.");
                 case EChatRoomEnterResponse.k_EChatRoomEnterResponseFull:
-                    return "That Steam lobby is already full.";
+                    return Loc.T("That Steam lobby is already full.");
                 case EChatRoomEnterResponse.k_EChatRoomEnterResponseBanned:
-                    return "Steam reported that this account is blocked from the lobby.";
+                    return Loc.T("Steam reported that this account is blocked from the lobby.");
                 case EChatRoomEnterResponse.k_EChatRoomEnterResponseLimited:
                 case EChatRoomEnterResponse.k_EChatRoomEnterResponseCommunityBan:
-                    return "Steam account restrictions prevented the lobby join.";
+                    return Loc.T("Steam account restrictions prevented the lobby join.");
                 case EChatRoomEnterResponse.k_EChatRoomEnterResponseNotAllowed:
-                    return "Steam blocked the lobby join.\nCheck your invite and privacy settings.";
+                    return Loc.T("Steam blocked the lobby join.\nCheck your invite and privacy settings.");
                 default:
-                    return "Steam could not join the lobby (" + response + ").\nUse Retry Last or Join Game to try again.";
+                    return Loc.F("Steam could not join the lobby ({0}).\nUse Retry Last or Join Game to try again.", response);
             }
         }
 
@@ -2986,17 +2983,17 @@ namespace CupheadOnline.Net
             switch ((EP2PSessionError)err)
             {
                 case EP2PSessionError.k_EP2PSessionErrorTimeout:
-                    return "Steam P2P timed out while contacting the other player.";
+                    return Loc.T("Steam P2P timed out while contacting the other player.");
                 case EP2PSessionError.k_EP2PSessionErrorNotRunningApp:
-                    return "The other player is not running Cuphead with the mod yet.";
+                    return Loc.T("The other player is not running Cuphead with the mod yet.");
                 case EP2PSessionError.k_EP2PSessionErrorNoRightsToApp:
-                    return "Steam denied the P2P session for this app.";
+                    return Loc.T("Steam denied the P2P session for this app.");
                 case EP2PSessionError.k_EP2PSessionErrorDestinationNotLoggedIn:
-                    return "The other player's Steam session went offline.";
+                    return Loc.T("The other player's Steam session went offline.");
                 case EP2PSessionError.k_EP2PSessionErrorMax:
-                    return "Steam P2P reported an unknown error.";
+                    return Loc.T("Steam P2P reported an unknown error.");
                 default:
-                    return "Steam P2P failed (" + err + ").";
+                    return Loc.F("Steam P2P failed ({0}).", err);
             }
         }
 

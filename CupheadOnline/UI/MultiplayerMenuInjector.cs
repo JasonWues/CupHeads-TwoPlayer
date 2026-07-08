@@ -122,7 +122,8 @@ namespace CupheadOnline.UI
             var uiText = mpGO.GetComponentInChildren<Text>(true);
             if (uiText != null)
             {
-                uiText.text = "MULTIPLAYER";
+                uiText.text = Loc.T("MULTIPLAYER");
+                Loc.EnsureCjkFont(uiText);
                 Plugin.Log.LogInfo("[UI] Set UI.Text to MULTIPLAYER.");
             }
 
@@ -130,7 +131,7 @@ namespace CupheadOnline.UI
             var tm = mpGO.GetComponentInChildren<TextMesh>(true);
             if (tm != null)
             {
-                tm.text = "MULTIPLAYER";
+                tm.text = Loc.T("MULTIPLAYER");
                 Plugin.Log.LogInfo("[UI] Set TextMesh to MULTIPLAYER.");
             }
 
@@ -145,7 +146,7 @@ namespace CupheadOnline.UI
                 if (prop != null && prop.CanWrite &&
                     prop.PropertyType == typeof(string))
                 {
-                    prop.SetValue(comp, "MULTIPLAYER", null);
+                    prop.SetValue(comp, Loc.T("MULTIPLAYER"), null);
                     Plugin.Log.LogInfo("[UI] Set " + type.Name + ".text via reflection.");
                 }
             }

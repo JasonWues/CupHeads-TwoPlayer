@@ -10,18 +10,17 @@ namespace CupheadOnline.Patches
 {
     internal static class UniversalInputRouter
     {
-        static readonly MethodInfo GetPlayerInputMethod =
-            AccessTools.Method(typeof(PlayerManager), "GetPlayerInput", new[] { typeof(PlayerId) });
-        static readonly Type RewiredPlayerType = AccessTools.TypeByName("Rewired.Player");
-
+        // Rewired_Core.dll ships with the game and is referenced directly, so the
+        // hot input queries below are plain calls. The MethodInfo fields remain
+        // only as Harmony TargetMethod anchors for the patches further down.
         internal static readonly MethodInfo RewiredGetAxisMethod =
-            RewiredPlayerType == null ? null : AccessTools.Method(RewiredPlayerType, "GetAxis", new[] { typeof(int) });
+            AccessTools.Method(typeof(Rewired.Player), "GetAxis", new[] { typeof(int) });
         internal static readonly MethodInfo RewiredGetButtonMethod =
-            RewiredPlayerType == null ? null : AccessTools.Method(RewiredPlayerType, "GetButton", new[] { typeof(int) });
+            AccessTools.Method(typeof(Rewired.Player), "GetButton", new[] { typeof(int) });
         internal static readonly MethodInfo RewiredGetButtonDownMethod =
-            RewiredPlayerType == null ? null : AccessTools.Method(RewiredPlayerType, "GetButtonDown", new[] { typeof(int) });
+            AccessTools.Method(typeof(Rewired.Player), "GetButtonDown", new[] { typeof(int) });
         internal static readonly MethodInfo RewiredGetButtonUpMethod =
-            RewiredPlayerType == null ? null : AccessTools.Method(RewiredPlayerType, "GetButtonUp", new[] { typeof(int) });
+            AccessTools.Method(typeof(Rewired.Player), "GetButtonUp", new[] { typeof(int) });
 
         static int _rawQueryDepth;
         static uint _nextInputTick = 1;
@@ -34,12 +33,11 @@ namespace CupheadOnline.Patches
 
         internal static bool IsRawQuery => _rawQueryDepth > 0;
 
-        internal static object GetActions(PlayerId playerId)
+        internal static Rewired.Player GetActions(PlayerId playerId)
         {
-            if (GetPlayerInputMethod == null)
-                return null;
-
-            try { return GetPlayerInputMethod.Invoke(null, new object[] { playerId }); }
+            // PlayerManager.GetPlayerInput is a static array lookup; the try/catch
+            // covers the brief window before the game initializes that array.
+            try { return PlayerManager.GetPlayerInput(playerId); }
             catch { return null; }
         }
 
@@ -100,27 +98,16 @@ namespace CupheadOnline.Patches
             if (!IsValidButton(actionId))
                 return true;
 
-            MethodInfo method = down ? RewiredGetButtonDownMethod : up ? RewiredGetButtonUpMethod : RewiredGetButtonMethod;
-            if (method == null)
-                return false;
-
-            object playerOne = GetActions(PlayerId.PlayerOne);
-            object playerTwo = GetActions(PlayerId.PlayerTwo);
-
-            bool one = RawBool(playerOne, method, actionId);
-            bool two = RawBool(playerTwo, method, actionId);
+            bool one = RawButton(GetActions(PlayerId.PlayerOne), actionId, down, up);
+            bool two = RawButton(GetActions(PlayerId.PlayerTwo), actionId, down, up);
             value = one || two;
             return true;
         }
 
         internal static bool TryGetLocalAxis(int actionId, out float value)
         {
-            value = 0f;
-            if (RewiredGetAxisMethod == null)
-                return false;
-
-            float one = RawFloat(GetActions(PlayerId.PlayerOne), RewiredGetAxisMethod, actionId);
-            float two = RawFloat(GetActions(PlayerId.PlayerTwo), RewiredGetAxisMethod, actionId);
+            float one = RawAxis(GetActions(PlayerId.PlayerOne), actionId);
+            float two = RawAxis(GetActions(PlayerId.PlayerTwo), actionId);
             value = Mathf.Abs(two) > Mathf.Abs(one) ? two : one;
             return true;
         }
@@ -203,11 +190,7 @@ namespace CupheadOnline.Patches
             if (!IsValidButton(actionId))
                 return true;
 
-            MethodInfo method = down ? RewiredGetButtonDownMethod : up ? RewiredGetButtonUpMethod : RewiredGetButtonMethod;
-            if (method == null)
-                return false;
-
-            value = RawBool(GetActions(playerId), method, actionId);
+            value = RawButton(GetActions(playerId), actionId, down, up);
             return true;
         }
 
@@ -219,24 +202,25 @@ namespace CupheadOnline.Patches
             if (playerId == PlayerId.None)
                 return TryGetLocalAxis(actionId, out value);
 
-            value = 0f;
-            if (RewiredGetAxisMethod == null)
-                return false;
-
-            value = RawFloat(GetActions(playerId), RewiredGetAxisMethod, actionId);
+            value = RawAxis(GetActions(playerId), actionId);
             return true;
         }
 
-        static bool RawBool(object player, MethodInfo method, int actionId)
+        static bool RawButton(Rewired.Player player, int actionId, bool down, bool up)
         {
-            if (player == null || method == null)
+            if (player == null)
                 return false;
 
+            // _rawQueryDepth keeps the direct Rewired calls below from re-entering
+            // our own GetButton/GetAxis postfix patches.
             _rawQueryDepth++;
             try
             {
-                object result = method.Invoke(player, new object[] { actionId });
-                return result is bool && (bool)result;
+                if (down)
+                    return player.GetButtonDown(actionId);
+                if (up)
+                    return player.GetButtonUp(actionId);
+                return player.GetButton(actionId);
             }
             catch
             {
@@ -248,16 +232,15 @@ namespace CupheadOnline.Patches
             }
         }
 
-        static float RawFloat(object player, MethodInfo method, int actionId)
+        static float RawAxis(Rewired.Player player, int actionId)
         {
-            if (player == null || method == null)
+            if (player == null)
                 return 0f;
 
             _rawQueryDepth++;
             try
             {
-                object result = method.Invoke(player, new object[] { actionId });
-                return result is float ? (float)result : 0f;
+                return player.GetAxis(actionId);
             }
             catch
             {
@@ -294,7 +277,16 @@ namespace CupheadOnline.Patches
             if (Plugin.Net == null || !Plugin.Net.IsConnected)
                 return;
 
-            var packet = UniversalInputRouter.BuildLocalInputFrameForPlayer(MultiplayerSession.LocalId);
+            // Outgoing frames must use the same merged universal routing as the
+            // local prediction path (RouteButton). Sampling only the LocalId slot
+            // silently drops devices Rewired assigned to the other vanilla slot —
+            // on guests that is the auto-assigned first controller, which lands on
+            // Player One's slot because the mod blocks the Player Two join flow.
+            // The dev simulator is the exception: it deliberately splits devices
+            // per slot, so it keeps the per-player sample.
+            var packet = LocalDevSession.IsActive
+                ? UniversalInputRouter.BuildLocalInputFrameForPlayer(MultiplayerSession.LocalId)
+                : UniversalInputRouter.BuildLocalInputFrame();
             HighLatencyInputSync.RecordLocalFrame(MultiplayerSession.LocalId, packet);
             ResendRecentHighLatencyInputs();
             RememberHighLatencyInput(packet);

@@ -255,7 +255,7 @@ namespace CupheadOnline.Patches
             var lobbyTitleText = lobbyTitleGO.GetComponent<Text>();
             if (lobbyTitleText != null)
             {
-                lobbyTitleText.text = "MULTIPLAYER LOBBY";
+                lobbyTitleText.text = Loc.T("MULTIPLAYER LOBBY");
                 lobbyTitleText.alignment = TextAnchor.MiddleLeft;
             }
 
@@ -266,7 +266,7 @@ namespace CupheadOnline.Patches
             var subtitleText = subtitleGO.GetComponent<Text>();
             if (subtitleText != null)
             {
-                subtitleText.text = "Host, queue friends, sync saves, and launch together.";
+                subtitleText.text = Loc.T("Host, queue friends, sync saves, and launch together.");
                 subtitleText.alignment = TextAnchor.MiddleLeft;
             }
 
@@ -284,7 +284,7 @@ namespace CupheadOnline.Patches
             var actionTitleText = actionTitleGO.GetComponent<Text>();
             if (actionTitleText != null)
             {
-                actionTitleText.text = "ACTIONS";
+                actionTitleText.text = Loc.T("ACTIONS");
                 actionTitleText.alignment = TextAnchor.MiddleLeft;
             }
 
@@ -294,21 +294,21 @@ namespace CupheadOnline.Patches
             var rosterTitleText = rosterTitleGO.GetComponent<Text>();
             if (rosterTitleText != null)
             {
-                rosterTitleText.text = "ROSTER";
+                rosterTitleText.text = Loc.T("ROSTER");
                 rosterTitleText.alignment = TextAnchor.MiddleLeft;
             }
 
             var mpLayout = BuildLayout(actionCard, new Vector2(0f, -50f), 2f, sideContentWidth);
             MpMenuState.MpLayoutRoot = mpLayout.GetComponent<RectTransform>();
-            var hostGO     = CloneItem(exitGO, mpLayout, "HOST GAME");
-            var joinGO     = CloneItem(exitGO, mpLayout, "JOIN GAME");
+            var hostGO     = CloneItem(exitGO, mpLayout, Loc.T("HOST GAME"));
+            var joinGO     = CloneItem(exitGO, mpLayout, Loc.T("JOIN GAME"));
             var colorGO    = CloneItem(exitGO, mpLayout, PlayerColorSync.BuildLocalMenuLabel());
-            var inviteGO   = CloneItem(exitGO, mpLayout, "INVITE FRIEND");
-            var retryGO    = CloneItem(exitGO, mpLayout, "RETRY LAST");
-            var copyLobbyGO= CloneItem(exitGO, mpLayout, "COPY LOBBY ID");
-            var diagGO     = CloneItem(exitGO, mpLayout, "COPY DIAGNOSTICS");
+            var inviteGO   = CloneItem(exitGO, mpLayout, Loc.T("INVITE FRIEND"));
+            var retryGO    = CloneItem(exitGO, mpLayout, Loc.T("RETRY LAST"));
+            var copyLobbyGO= CloneItem(exitGO, mpLayout, Loc.T("COPY LOBBY ID"));
+            var diagGO     = CloneItem(exitGO, mpLayout, Loc.T("COPY DIAGNOSTICS"));
             BuildSpacer(mpLayout, 12f);
-            var backGO     = CloneItem(exitGO, mpLayout, "BACK");
+            var backGO     = CloneItem(exitGO, mpLayout, Loc.T("BACK"));
 
             int actionFontSize = Mathf.Max(13, sample.fontSize - 8);
             StyleActionItem(hostGO, sample.font, actionFontSize);
@@ -338,7 +338,7 @@ namespace CupheadOnline.Patches
             var colorTitleText = colorTitleGO.GetComponent<Text>();
             if (colorTitleText != null)
             {
-                colorTitleText.text = "SWATCHES";
+                colorTitleText.text = Loc.T("SWATCHES");
                 colorTitleText.alignment = TextAnchor.MiddleLeft;
             }
 
@@ -356,7 +356,7 @@ namespace CupheadOnline.Patches
                 var swatchText = swatchGO.GetComponent<Text>();
                 if (swatchText != null)
                 {
-                    swatchText.text = i == PlayerColorSync.AutoSelection ? "AUTO" : "\u25A0";
+                    swatchText.text = i == PlayerColorSync.AutoSelection ? Loc.T("AUTO") : "\u25A0";
                     swatchText.alignment = TextAnchor.MiddleCenter;
                     swatchText.alignByGeometry = true;
                     swatchText.lineSpacing = 1f;
@@ -420,7 +420,7 @@ namespace CupheadOnline.Patches
             MpMenuState.BackHintText = mpBackHintGO.GetComponent<Text>();
             if (MpMenuState.BackHintText != null)
             {
-                MpMenuState.BackHintText.text = "Escape / Controller B: Back";
+                MpMenuState.BackHintText.text = Loc.T("Escape / Controller B: Back");
                 MpMenuState.BackHintText.alignment = TextAnchor.MiddleRight;
             }
 
@@ -462,7 +462,7 @@ namespace CupheadOnline.Patches
             var titleT  = titleGO.GetComponent<Text>();
             if (titleT != null)
             {
-                titleT.text     = "CREDITS";
+                titleT.text     = Loc.T("CREDITS");
                 titleT.fontSize = sample.fontSize + 4;
                 titleT.color    = MpMenuState.SelColor(__instance);
                 titleT.horizontalOverflow = HorizontalWrapMode.Overflow;
@@ -474,7 +474,7 @@ namespace CupheadOnline.Patches
             BuildCreditsLine(
                 credRoot,
                 "CreditsLine1",
-                "Multiplayer Mod",
+                Loc.T("Multiplayer Mod"),
                 new Vector2(0f, 86f),
                 new Vector2(900f, 44f),
                 sample.font,
@@ -494,7 +494,7 @@ namespace CupheadOnline.Patches
             BuildCreditsLine(
                 credRoot,
                 "CreditsLine3",
-                "Made for Daniel",
+                Loc.T("Made for Daniel"),
                 new Vector2(0f, -40f),
                 new Vector2(860f, 42f),
                 sample.font,
@@ -504,7 +504,7 @@ namespace CupheadOnline.Patches
             BuildCreditsLine(
                 credRoot,
                 "CreditsLine4",
-                "Special thanks to Internallinked",
+                Loc.T("Special thanks to Internallinked"),
                 new Vector2(0f, -86f),
                 new Vector2(1080f, 38f),
                 sample.font,
@@ -514,7 +514,7 @@ namespace CupheadOnline.Patches
             BuildCreditsLine(
                 credRoot,
                 "CreditsLine5",
-                "cuz me and him wanna play.",
+                Loc.T("cuz me and him wanna play."),
                 new Vector2(0f, -126f),
                 new Vector2(980f, 40f),
                 sample.font,
@@ -526,15 +526,15 @@ namespace CupheadOnline.Patches
                 sample.font, Mathf.Max(12, sample.fontSize - 6),
                 new Color(0.6f, 0.6f, 0.6f, 0.8f));
             var hintT = hintGO.GetComponent<Text>();
-            if (hintT != null) hintT.text = "[ Press Escape to go back ]";
+            if (hintT != null) hintT.text = Loc.T("[ Press Escape to go back ]");
 
             // ── Append MULTIPLAYER + CREDITS to main-menu arrays ──────────────
-            var mpLabelGO  = CloneItem(exitGO, MpMenuState.MainContainer, "MULTIPLAYER");
+            var mpLabelGO  = CloneItem(exitGO, MpMenuState.MainContainer, Loc.T("MULTIPLAYER"));
             PositionBelow(textItems, mpLabelGO);
             GameObject credLabelGO = null;
             if (Plugin.ShowCreditsMenu)
             {
-                credLabelGO = CloneItem(exitGO, MpMenuState.MainContainer, "CREDITS");
+                credLabelGO = CloneItem(exitGO, MpMenuState.MainContainer, Loc.T("CREDITS"));
                 PositionBelow(textItems, credLabelGO, mpLabelGO);
             }
 
@@ -561,23 +561,23 @@ namespace CupheadOnline.Patches
             if (Plugin.ShowCreditsMenu && credLabelGO != null)
             {
                 __instance.StartCoroutine(EnforceLabels(
-                    mpLabelGO.GetComponent<Text>(),   "MULTIPLAYER",
-                    credLabelGO.GetComponent<Text>(), "CREDITS",
-                    hostGO.GetComponent<Text>(),      "HOST GAME",
-                    inviteGO.GetComponent<Text>(),    "INVITE FRIEND",
-                    diagGO.GetComponent<Text>(),      "COPY DIAGNOSTICS",
-                    backGO.GetComponent<Text>(),      "BACK",
-                    titleT,                           "CREDITS"));
+                    mpLabelGO.GetComponent<Text>(),   Loc.T("MULTIPLAYER"),
+                    credLabelGO.GetComponent<Text>(), Loc.T("CREDITS"),
+                    hostGO.GetComponent<Text>(),      Loc.T("HOST GAME"),
+                    inviteGO.GetComponent<Text>(),    Loc.T("INVITE FRIEND"),
+                    diagGO.GetComponent<Text>(),      Loc.T("COPY DIAGNOSTICS"),
+                    backGO.GetComponent<Text>(),      Loc.T("BACK"),
+                    titleT,                           Loc.T("CREDITS")));
             }
             else
             {
                 __instance.StartCoroutine(EnforceLabels(
-                    mpLabelGO.GetComponent<Text>(),   "MULTIPLAYER",
-                    hostGO.GetComponent<Text>(),      "HOST GAME",
-                    inviteGO.GetComponent<Text>(),    "INVITE FRIEND",
-                    diagGO.GetComponent<Text>(),      "COPY DIAGNOSTICS",
-                    backGO.GetComponent<Text>(),      "BACK",
-                    titleT,                           "CREDITS"));
+                    mpLabelGO.GetComponent<Text>(),   Loc.T("MULTIPLAYER"),
+                    hostGO.GetComponent<Text>(),      Loc.T("HOST GAME"),
+                    inviteGO.GetComponent<Text>(),    Loc.T("INVITE FRIEND"),
+                    diagGO.GetComponent<Text>(),      Loc.T("COPY DIAGNOSTICS"),
+                    backGO.GetComponent<Text>(),      Loc.T("BACK"),
+                    titleT,                           Loc.T("CREDITS")));
             }
 
             Plugin.Log.LogInfo("[Menu] Setup complete.");
@@ -703,6 +703,7 @@ namespace CupheadOnline.Patches
                 t.verticalOverflow = VerticalWrapMode.Overflow;
                 t.resizeTextForBestFit = false;
                 t.alignment = TextAnchor.MiddleCenter;
+                Loc.EnsureCjkFont(t);
             }
             var le = go.GetComponent<LayoutElement>() ?? go.AddComponent<LayoutElement>();
             le.enabled = true;
@@ -741,6 +742,7 @@ namespace CupheadOnline.Patches
                 text.lineSpacing = 1f;
                 text.horizontalOverflow = HorizontalWrapMode.Overflow;
                 text.verticalOverflow = VerticalWrapMode.Overflow;
+                Loc.EnsureCjkFont(text);
             }
 
             var le = go.GetComponent<LayoutElement>() ?? go.AddComponent<LayoutElement>();
@@ -782,6 +784,7 @@ namespace CupheadOnline.Patches
             txt.horizontalOverflow = HorizontalWrapMode.Overflow;
             txt.verticalOverflow   = VerticalWrapMode.Overflow;
             txt.text               = "";
+            Loc.EnsureCjkFont(txt);
             return go;
         }
 
@@ -1025,7 +1028,7 @@ namespace CupheadOnline.Patches
             }
             else if (!Plugin.Net.IsSteamReady)
             {
-                footer += "  |  Steam unavailable outside Steam";
+                footer += "  |  " + Loc.T("Steam unavailable outside Steam");
             }
 
             if (MpMenuState.MainFooterText.text != footer)
@@ -1155,12 +1158,12 @@ namespace CupheadOnline.Patches
 
         static string BuildLobbySaveSlotLabel()
         {
-            return "SAVE SLOT: " + (GetLobbySaveSlotIndex() + 1);
+            return Loc.T("SAVE SLOT: ") + (GetLobbySaveSlotIndex() + 1);
         }
 
         static string BuildLobbyCharacterLabel()
         {
-            return "LEAD: " + GetLobbyLeadCharacterName();
+            return Loc.T("LEAD: ") + GetLobbyLeadCharacterName();
         }
 
         static void UpdateDynamicMenuLabels()
@@ -1173,34 +1176,34 @@ namespace CupheadOnline.Patches
                 Plugin.Net.IsConnected
                     ? (Plugin.Net.IsHost
                         ? BuildLobbySaveSlotLabel()
-                        : (SessionSync.HasTrackedSave ? "HOST SAVE: " + (GetLobbySaveSlotIndex() + 1) : "WAIT FOR HOST"))
-                    : "HOST GAME");
+                        : (SessionSync.HasTrackedSave ? Loc.T("HOST SAVE: ") + (GetLobbySaveSlotIndex() + 1) : Loc.T("WAIT FOR HOST")))
+                    : Loc.T("HOST GAME"));
             SetMpItemLabel(
                 MpMenuState.JoinIndex,
                 Plugin.Net.IsConnected
                     ? (Plugin.Net.IsHost
                         ? BuildLobbyCharacterLabel()
-                        : (SessionSync.HasTrackedSave ? "WAIT FOR HOST" : "REQUEST HOST SAVE"))
+                        : (SessionSync.HasTrackedSave ? Loc.T("WAIT FOR HOST") : Loc.T("REQUEST HOST SAVE")))
                     : _joinOverlayReady
-                        ? "OPEN FRIENDS"
+                        ? Loc.T("OPEN FRIENDS")
                         : TryGetClipboardLobbyId(out clipboardRaw, out clipboardLobbyId)
-                            ? "JOIN CLIPBOARD"
-                            : "JOIN GAME");
+                            ? Loc.T("JOIN CLIPBOARD")
+                            : Loc.T("JOIN GAME"));
             SetMpItemLabel(MpMenuState.ColorIndex, PlayerColorSync.BuildLocalMenuLabel());
             SetMpItemLabel(
                 MpMenuState.InviteIndex,
                 Plugin.Net.IsConnected
-                    ? (Plugin.Net.IsHost ? "SEND RESYNC" : "REQUEST RESYNC")
-                    : "INVITE FRIEND");
+                    ? (Plugin.Net.IsHost ? Loc.T("SEND RESYNC") : Loc.T("REQUEST RESYNC"))
+                    : Loc.T("INVITE FRIEND"));
             SetMpItemLabel(
                 MpMenuState.RetryIndex,
                 Plugin.Net.IsConnected && Plugin.Net.IsHost
-                    ? "START GAME"
-                    : Plugin.Net.GetRetryActionLabel());
-            SetMpItemLabel(MpMenuState.CopyLobbyIndex, "COPY LOBBY ID");
-            SetMpItemLabel(MpMenuState.DiagnosticsIndex, "EXPORT BUG REPORT");
+                    ? Loc.T("START GAME")
+                    : Loc.T(Plugin.Net.GetRetryActionLabel()));
+            SetMpItemLabel(MpMenuState.CopyLobbyIndex, Loc.T("COPY LOBBY ID"));
+            SetMpItemLabel(MpMenuState.DiagnosticsIndex, Loc.T("EXPORT BUG REPORT"));
             SetMpItemLabel(MpMenuState.BackIndex,
-                Plugin.Net.IsConnected || Plugin.Net.IsInLobby ? "DISCONNECT" : "BACK");
+                Plugin.Net.IsConnected || Plugin.Net.IsInLobby ? Loc.T("DISCONNECT") : Loc.T("BACK"));
         }
 
         static void UpdateSteamBadge()
@@ -1208,7 +1211,7 @@ namespace CupheadOnline.Patches
             if (MpMenuState.SteamBadgeText == null) return;
 
             string badge = Plugin.Net.GetSteamBadgeText();
-            MpMenuState.SteamBadgeText.text = "[ " + badge + " ]";
+            MpMenuState.SteamBadgeText.text = "[ " + Loc.T(badge) + " ]";
 
             if (badge.IndexOf("OFFLINE", System.StringComparison.OrdinalIgnoreCase) >= 0
              || badge.IndexOf("NOT VIA STEAM", System.StringComparison.OrdinalIgnoreCase) >= 0)
@@ -1247,24 +1250,23 @@ namespace CupheadOnline.Patches
                             return SessionSync.CompatibilitySummary;
 
                         return Plugin.Net.IsHost
-                            ? "Choose the save slot for this run here in the lobby. The host can start as soon as a save is selected."
+                            ? Loc.T("Choose the save slot for this run here in the lobby. The host can start as soon as a save is selected.")
                             : (SessionSync.HasTrackedSave
-                                ? "The host picked the current save. You will follow when the host starts."
-                                : "Connected. Wait for the host to choose a save slot.");
+                                ? Loc.T("The host picked the current save. You will follow when the host starts.")
+                                : Loc.T("Connected. Wait for the host to choose a save slot."));
                     }
                     if (Plugin.Net.IsConnected || Plugin.Net.IsInLobby)
-                        return "Leave the current session before starting a fresh host lobby.";
-                    return "Create a friends-only Steam lobby for one guest.";
+                        return Loc.T("Leave the current session before starting a fresh host lobby.");
+                    return Loc.T("Create a friends-only Steam lobby for one guest.");
 
                 case MpMenuState.JoinIndex:
                     if (Plugin.Net.IsConnected)
                     {
                         if (Plugin.Net.IsHost)
-                            return "Choose whether the host starts as "
-                                + GetLobbyLeadCharacterName()
-                                + ". The guest automatically becomes "
-                                + GetLobbyGuestCharacterName()
-                                + ".";
+                            return Loc.F(
+                                "Choose whether the host starts as {0}. The guest automatically becomes {1}.",
+                                GetLobbyLeadCharacterName(),
+                                GetLobbyGuestCharacterName());
 
                         if (SessionSync.DesyncSeverity >= SessionIssueSeverity.Warning)
                             return SessionSync.DesyncSummary;
@@ -1272,54 +1274,54 @@ namespace CupheadOnline.Patches
                             return SessionSync.CompatibilitySummary;
 
                         if (!SessionSync.HasTrackedSave)
-                            return "Ask the host for the current save selection again. This fixes missed lobby sync packets.";
+                            return Loc.T("Ask the host for the current save selection again. This fixes missed lobby sync packets.");
 
-                        return "Waiting for the host to start the selected save.";
+                        return Loc.T("Waiting for the host to start the selected save.");
                     }
                     if (_joinOverlayReady)
-                        return "Open Steam Friends and wait for the host invite.";
+                        return Loc.T("Open Steam Friends and wait for the host invite.");
                     if (TryGetClipboardLobbyId(out clipboardRaw, out clipboardLobbyId))
-                        return "Join lobby #" + clipboardLobbyId + " straight from the clipboard.";
+                        return Loc.F("Join lobby #{0} straight from the clipboard.", clipboardLobbyId);
                     if (Plugin.AutoOpenSteamFriends)
-                        return "Wait for a Steam invite. The Friends overlay opens automatically.";
-                    return "Wait for a Steam invite, or copy a lobby ID to the clipboard to join directly.";
+                        return Loc.T("Wait for a Steam invite. The Friends overlay opens automatically.");
+                    return Loc.T("Wait for a Steam invite, or copy a lobby ID to the clipboard to join directly.");
 
                 case MpMenuState.ColorIndex:
-                    return "Use Left, Right, or Accept to choose your lobby swatch and in-game tint. Auto keeps the first two gameplay slots classic and gives extra participants stable colors.";
+                    return Loc.T("Use Left, Right, or Accept to choose your lobby swatch and in-game tint. Auto keeps the first two gameplay slots classic and gives extra participants stable colors.");
 
                 case MpMenuState.InviteIndex:
                     if (Plugin.Net.IsConnected)
                         return Plugin.Net.IsHost
-                            ? "Send a fresh sync bundle and boss-priority burst to the guest."
-                            : "Ask the host to resend the current session state.";
+                            ? Loc.T("Send a fresh sync bundle and boss-priority burst to the guest.")
+                            : Loc.T("Ask the host to resend the current session state.");
                     return Plugin.Net.CanInviteFriend
-                        ? "Open Steam's invite dialog for the current lobby."
-                        : "Available once you host a lobby.";
+                        ? Loc.T("Open Steam's invite dialog for the current lobby.")
+                        : Loc.T("Available once you host a lobby.");
 
                 case MpMenuState.RetryIndex:
                     if (Plugin.Net.IsConnected && Plugin.Net.IsHost)
                     {
                         string startReason;
                         return SessionSync.CanHostStartRun(out startReason)
-                            ? "Start the run directly from the multiplayer lobby with the selected save and character order."
+                            ? Loc.T("Start the run directly from the multiplayer lobby with the selected save and character order.")
                             : startReason;
                     }
                     return Plugin.Net.CanRetryLastAction
-                        ? "Retry the last host or join action without leaving the menu."
-                        : "Becomes available after a host or join attempt.";
+                        ? Loc.T("Retry the last host or join action without leaving the menu.")
+                        : Loc.T("Becomes available after a host or join attempt.");
 
                 case MpMenuState.CopyLobbyIndex:
                     return Plugin.Net.CanCopyLobbyId
-                        ? "Copy the current Steam lobby ID so someone can join from the clipboard."
-                        : "Available once a lobby exists.";
+                        ? Loc.T("Copy the current Steam lobby ID so someone can join from the clipboard.")
+                        : Loc.T("Available once a lobby exists.");
 
                 case MpMenuState.DiagnosticsIndex:
-                    return "Export a bug report folder with diagnostics, logs, and config files.";
+                    return Loc.T("Export a bug report folder with diagnostics, logs, and config files.");
 
                 default:
                     return Plugin.Net.IsConnected || Plugin.Net.IsInLobby
-                        ? "Disconnect the current Steam session and return to the main menu."
-                        : "Return to the main menu.";
+                        ? Loc.T("Disconnect the current Steam session and return to the main menu.")
+                        : Loc.T("Return to the main menu.");
             }
         }
 
@@ -1512,11 +1514,11 @@ namespace CupheadOnline.Patches
                             MpMenuState.SetStatus(
                                 Plugin.Net.IsConnected
                                     ? (Plugin.Net.IsHost
-                                        ? "Only the host can choose the multiplayer save."
-                                        : "Waiting for the host to choose a save slot.")
+                                        ? Loc.T("Only the host can choose the multiplayer save.")
+                                        : Loc.T("Waiting for the host to choose a save slot."))
                                     : Plugin.Net.IsInLobby
-                                        ? "Leave the current session before hosting again."
-                                    : "Steam is still busy. Please wait.",
+                                        ? Loc.T("Leave the current session before hosting again.")
+                                    : Loc.T("Steam is still busy. Please wait."),
                                 animate: false);
                         break;
 
@@ -1534,7 +1536,7 @@ namespace CupheadOnline.Patches
                                     MpMenuState.SetStatus(status, animate: false);
                                 }
                                 else
-                                    MpMenuState.SetStatus("Waiting for the host to start.", animate: false);
+                                    MpMenuState.SetStatus(Loc.T("Waiting for the host to start."), animate: false);
                             }
                             else if (!HandleJoinAccept())
                             {
@@ -1547,14 +1549,14 @@ namespace CupheadOnline.Patches
                                 Plugin.Net.IsConnected
                                     ? (Plugin.Net.IsHost
                                         ? (SessionSync.HasTrackedSave
-                                            ? "Start Game is available now."
-                                            : "Pick a save first.")
-                                        : "Waiting for the host to start.")
+                                            ? Loc.T("Start Game is available now.")
+                                            : Loc.T("Pick a save first."))
+                                        : Loc.T("Waiting for the host to start."))
                                 : _waitingForInvite
-                                    ? "Waiting for a Steam invite..."
+                                    ? Loc.T("Waiting for a Steam invite...")
                                     : Plugin.Net.IsInLobby || Plugin.Net.IsConnected
-                                        ? "Leave the current session before joining another lobby."
-                                        : "Steam is still busy. Please wait.",
+                                        ? Loc.T("Leave the current session before joining another lobby.")
+                                        : Loc.T("Steam is still busy. Please wait."),
                                 animate: false);
                         }
                         break;
@@ -1620,9 +1622,9 @@ namespace CupheadOnline.Patches
             MpMenuState.SetStatus(
                 Plugin.Net.IsConnected
                     ? (Plugin.Net.IsHost
-                        ? "Guest connected.\nChoose SAVE SLOT and LEAD, then press START GAME."
-                        : "Connected.\nWait for the host to choose a save and start.")
-                    : Plugin.Net.IsSteamReady ? "Select an option." : Plugin.Net.SteamUnavailableStatus,
+                        ? Loc.T("Guest connected.\nChoose SAVE SLOT and LEAD, then press START GAME.")
+                        : Loc.T("Connected.\nWait for the host to choose a save and start."))
+                    : Plugin.Net.IsSteamReady ? Loc.T("Select an option.") : Plugin.Net.SteamUnavailableStatus,
                 animate: false);
             if (Plugin.Net != null)
                 Plugin.Net.NotifyLocalAppearanceChanged();
@@ -1687,7 +1689,7 @@ namespace CupheadOnline.Patches
         {
             if (!Plugin.Net.CanOpenSaveSlot)
             {
-                MpMenuState.SetStatus("Connect a guest before opening the save slots.", animate: false);
+                MpMenuState.SetStatus(Loc.T("Connect a guest before opening the save slots."), animate: false);
                 return;
             }
 
@@ -1721,7 +1723,7 @@ namespace CupheadOnline.Patches
                 Plugin.Log.LogWarning("[Menu] Failed to open save slot select: " + ex.Message);
                 if (MpMenuState.MainContainer != null)
                     MpMenuState.MainContainer.SetActive(true);
-                MpMenuState.SetStatus("Could not open the save slots.", animate: false);
+                MpMenuState.SetStatus(Loc.T("Could not open the save slots."), animate: false);
             }
         }
 
@@ -1739,7 +1741,7 @@ namespace CupheadOnline.Patches
             MpMenuState.InputLocked = false;
             _lastPresence           = null;   // force presence refresh after cancel
             ApplyColors(null);
-            MpMenuState.SetStatus(status, animate: false);
+            MpMenuState.SetStatus(Loc.T(status), animate: false);
             if (MpMenuState.PresenceText != null) MpMenuState.PresenceText.text = "";
             UpdateDynamicMenuLabels();
             UpdateSteamBadge();
@@ -1808,7 +1810,7 @@ namespace CupheadOnline.Patches
 
             if (MpMenuState.ColorDetailText != null)
             {
-                string detail = "Selected: "
+                string detail = Loc.T("Selected: ")
                     + PlayerColorSync.GetSelectionName(preferredSelection).ToUpperInvariant();
                 MpMenuState.ColorDetailText.text = detail;
                 MpMenuState.ColorDetailText.color = colorMenuFocused
@@ -1827,7 +1829,7 @@ namespace CupheadOnline.Patches
             {
                 string peerName = Plugin.Net.CurrentPeerName;
                 if (!string.IsNullOrEmpty(peerName) && peerName != "Unknown Player")
-                    p = "Peer: " + peerName + "\nState: " + Plugin.Net.CurrentStateName;
+                    p = Loc.F("Peer: {0}\nState: {1}", peerName, Plugin.Net.CurrentStateName);
             }
 
             string peerSummary = Plugin.Net.CurrentPeerSummary;
@@ -1841,8 +1843,8 @@ namespace CupheadOnline.Patches
             if (string.IsNullOrEmpty(p))
             {
                 p = Plugin.Net.IsSteamReady
-                    ? "No lobby yet.\n\nHost a game to create a Steam lobby, or join one to see the full party roster here."
-                    : "Steam is not ready.\n\nLaunch Cuphead through Steam to populate the lobby roster and use invites.";
+                    ? Loc.T("No lobby yet.\n\nHost a game to create a Steam lobby, or join one to see the full party roster here.")
+                    : Loc.T("Steam is not ready.\n\nLaunch Cuphead through Steam to populate the lobby roster and use invites.");
             }
 
             if (p == _lastPresence) return;   // only assign when string actually changes
@@ -1881,9 +1883,7 @@ namespace CupheadOnline.Patches
             if (updateStatus)
             {
                 MpMenuState.SetStatus(
-                    "Selected save slot "
-                    + (slotIndex + 1)
-                    + ". The host can start when ready.",
+                    Loc.F("Selected save slot {0}. The host can start when ready.", slotIndex + 1),
                     animate: false);
             }
 
@@ -1894,7 +1894,7 @@ namespace CupheadOnline.Patches
         {
             if (!Plugin.Net.IsConnected || !Plugin.Net.IsHost)
             {
-                MpMenuState.SetStatus("Connect a guest before choosing the multiplayer save.", animate: false);
+                MpMenuState.SetStatus(Loc.T("Connect a guest before choosing the multiplayer save."), animate: false);
                 return;
             }
 
@@ -1910,14 +1910,14 @@ namespace CupheadOnline.Patches
         {
             if (!Plugin.Net.IsConnected || !Plugin.Net.IsHost)
             {
-                MpMenuState.SetStatus("Only the host can choose the character order.", animate: false);
+                MpMenuState.SetStatus(Loc.T("Only the host can choose the character order."), animate: false);
                 return;
             }
 
             var data = GetLobbySaveData();
             if (data == null)
             {
-                MpMenuState.SetStatus("That save slot is unavailable right now.", animate: false);
+                MpMenuState.SetStatus(Loc.T("That save slot is unavailable right now."), animate: false);
                 return;
             }
 
@@ -1926,11 +1926,7 @@ namespace CupheadOnline.Patches
                 return;
 
             MpMenuState.SetStatus(
-                "Host will play "
-                + GetLobbyLeadCharacterName()
-                + ". Guest will play "
-                + GetLobbyGuestCharacterName()
-                + ".",
+                Loc.F("Host will play {0}. Guest will play {1}.", GetLobbyLeadCharacterName(), GetLobbyGuestCharacterName()),
                 animate: false);
         }
 
@@ -1938,7 +1934,7 @@ namespace CupheadOnline.Patches
         {
             if (!Plugin.Net.IsConnected || !Plugin.Net.IsHost)
             {
-                MpMenuState.SetStatus("Only the host can start the run.", animate: false);
+                MpMenuState.SetStatus(Loc.T("Only the host can start the run."), animate: false);
                 return;
             }
 
@@ -2044,8 +2040,7 @@ namespace CupheadOnline.Patches
             else
             {
                 MpMenuState.SetStatus(
-                    "Waiting for a Steam invite...\n"
-                    + "Press Shift+Tab to open Steam overlay.",
+                    Loc.T("Waiting for a Steam invite...\nPress Shift+Tab to open Steam overlay."),
                     animate: true);
             }
 
@@ -2093,7 +2088,7 @@ namespace CupheadOnline.Patches
         {
             string folder = BugReportExporter.Export();
             GUIUtility.systemCopyBuffer = folder;
-            MpMenuState.SetStatus("Bug report exported to:\n" + folder, animate: false);
+            MpMenuState.SetStatus(Loc.F("Bug report exported to:\n{0}", folder), animate: false);
         }
 
         // ── Join timeout + second-press overlay flow ──────────────────────────
@@ -2128,8 +2123,7 @@ namespace CupheadOnline.Patches
             MpMenuState.InputLocked = false;
             ApplyColors(null);
             MpMenuState.SetStatus(
-                "No invite received yet.\n"
-                + "Press Join Game again to open your Friends list.",
+                Loc.T("No invite received yet.\nPress Join Game again to open your Friends list."),
                 animate: false);
             _joinOverlayReady = true;
         }

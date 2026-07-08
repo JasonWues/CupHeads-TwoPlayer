@@ -38,6 +38,28 @@ namespace CupheadOnline.Sync
         private static uint _lastReceivedBossTick;
         private static float _lastHighLatencyVisualLogAt = -1f;
         private static float _lastBossHealthAuthorityLogAt = -1f;
+        private static int _lastKnownEnemyCount;
+
+        // Per-scene caches keyed by GameObject instance ID; cleared in Reset(),
+        // which runs on every synced scene transition. The Type-keyed reflection
+        // caches below are process-stable and are intentionally never cleared.
+        private static readonly Dictionary<int, Animator> _animatorCache = new Dictionary<int, Animator>(64);
+        private static readonly Dictionary<int, Rigidbody2D> _rigidbodyCache = new Dictionary<int, Rigidbody2D>(64);
+        private static readonly Dictionary<int, bool> _bossNameCache = new Dictionary<int, bool>(64);
+        private static readonly List<int> _clientTickKeys = new List<int>(64);
+        private static readonly Dictionary<System.Type, FieldInfo> _phaseFields =
+            new Dictionary<System.Type, FieldInfo>(64);
+        private static readonly Dictionary<System.Type, FieldInfo> _levelPropertiesFields =
+            new Dictionary<System.Type, FieldInfo>(16);
+        private static readonly Dictionary<System.Type, BossHealthAccessor> _bossHealthAccessors =
+            new Dictionary<System.Type, BossHealthAccessor>(16);
+
+        private sealed class BossHealthAccessor
+        {
+            public PropertyInfo CurrentHealth;
+            public FieldInfo TotalHealth;
+            public MethodInfo DealDamage;
+        }
 
         private struct EnemySnapshotState
         {
@@ -68,12 +90,11 @@ namespace CupheadOnline.Sync
         {
             if (!MultiplayerSession.IsHost || Plugin.Net == null || !Plugin.Net.IsConnected) return;
 
-            var enemies = Object.FindObjectsOfType<DamageReceiver>();
-            int enemyCount = CountEnemies(enemies);
-            bool bossPriorityMode = _recoveryBurstFrames > 0 || enemyCount <= 3;
-            float bossHp;
-            float bossTotalHp;
-            bool hasBossHealth = TryGetLevelBossHealth(out bossHp, out bossTotalHp);
+            // Cadence gate first, so the FindObjectsOfType scan below only runs on
+            // frames that actually broadcast. The gate uses the previous broadcast's
+            // enemy count, so a cadence switch can lag one broadcast at most.
+            bool burstActive = _recoveryBurstFrames > 0;
+            bool bossPriorityMode = burstActive || _lastKnownEnemyCount <= 3;
 
             _broadcastCounter++;
             int broadcastEvery = bossPriorityMode ? 1 : BROADCAST_EVERY;
@@ -81,6 +102,14 @@ namespace CupheadOnline.Sync
             _broadcastCounter = 0;
             if (_recoveryBurstFrames > 0)
                 _recoveryBurstFrames--;
+
+            var enemies = Object.FindObjectsOfType<DamageReceiver>();
+            int enemyCount = CountEnemies(enemies);
+            _lastKnownEnemyCount = enemyCount;
+            bossPriorityMode = burstActive || enemyCount <= 3;
+            float bossHp;
+            float bossTotalHp;
+            bool hasBossHealth = TryGetLevelBossHealth(out bossHp, out bossTotalHp);
 
             foreach (var dr in enemies)
             {
@@ -220,17 +249,18 @@ namespace CupheadOnline.Sync
             if (_lastReceivedStates.Count == 0)
                 return;
 
-            var keys = new List<int>(_lastReceivedStates.Keys);
-            for (int i = 0; i < keys.Count; i++)
+            _clientTickKeys.Clear();
+            _clientTickKeys.AddRange(_lastReceivedStates.Keys);
+            for (int i = 0; i < _clientTickKeys.Count; i++)
             {
                 EnemyStatePacket pkt;
-                if (!_lastReceivedStates.TryGetValue(keys[i], out pkt))
+                if (!_lastReceivedStates.TryGetValue(_clientTickKeys[i], out pkt))
                     continue;
 
                 DamageReceiver dr;
                 if (!EnemyRegistry.TryGet(pkt.InstanceId, out dr) || dr == null)
                 {
-                    _lastReceivedStates.Remove(keys[i]);
+                    _lastReceivedStates.Remove(_clientTickKeys[i]);
                     continue;
                 }
 
@@ -441,8 +471,16 @@ namespace CupheadOnline.Sync
             if (go == null)
                 return null;
 
+            int id = go.GetInstanceID();
+            Animator cached;
+            if (_animatorCache.TryGetValue(id, out cached) && cached != null)
+                return cached;
+
             var direct = go.GetComponent<Animator>();
-            return direct != null ? direct : go.GetComponentInChildren<Animator>();
+            var anim = direct != null ? direct : go.GetComponentInChildren<Animator>();
+            if (anim != null)
+                _animatorCache[id] = anim;
+            return anim;
         }
 
         static Rigidbody2D GetPrimaryRigidbody(GameObject go)
@@ -450,19 +488,31 @@ namespace CupheadOnline.Sync
             if (go == null)
                 return null;
 
+            int id = go.GetInstanceID();
+            Rigidbody2D cached;
+            if (_rigidbodyCache.TryGetValue(id, out cached) && cached != null)
+                return cached;
+
             var direct = go.GetComponent<Rigidbody2D>();
-            return direct != null ? direct : go.GetComponentInChildren<Rigidbody2D>();
+            var rb = direct != null ? direct : go.GetComponentInChildren<Rigidbody2D>();
+            if (rb != null)
+                _rigidbodyCache[id] = rb;
+            return rb;
         }
 
         public static void Reset()
         {
             _broadcastCounter = 0;
             _recoveryBurstFrames = 0;
+            _lastKnownEnemyCount = 0;
             _lastSent.Clear();
             _lastReceivedTicks.Clear();
             _lastReceivedStates.Clear();
             _motionEstimates.Clear();
             _suppressedClientEnemies.Clear();
+            _animatorCache.Clear();
+            _rigidbodyCache.Clear();
+            _bossNameCache.Clear();
             _lastReceivedBossTick = 0;
             _lastHighLatencyVisualLogAt = -1f;
             _lastBossHealthAuthorityLogAt = -1f;
@@ -571,19 +621,30 @@ namespace CupheadOnline.Sync
 
         static byte GetEnemyPhase(DamageReceiver dr)
         {
-            // Try to read a common 'phase' or 'currentPhase' int field
-            var t  = dr.GetType();
-            const BindingFlags bf = BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public;
-            foreach (var name in new[] { "phase", "currentPhase", "_phase", "Phase" })
+            // Mirrors FindHpField's per-type cache; a cached null means the type
+            // has no recognizable phase field.
+            var t = dr.GetType();
+            FieldInfo fi;
+            if (!_phaseFields.TryGetValue(t, out fi))
             {
-                var fi = t.GetField(name, bf);
-                if (fi != null && fi.FieldType == typeof(int))
+                const BindingFlags bf = BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public;
+                foreach (var name in new[] { "phase", "currentPhase", "_phase", "Phase" })
                 {
-                    try { return (byte)(int)fi.GetValue(dr); }
-                    catch { }
+                    var candidate = t.GetField(name, bf);
+                    if (candidate != null && candidate.FieldType == typeof(int))
+                    {
+                        fi = candidate;
+                        break;
+                    }
                 }
+                _phaseFields[t] = fi;
             }
-            return 0;
+
+            if (fi == null)
+                return 0;
+
+            try { return (byte)(int)fi.GetValue(dr); }
+            catch { return 0; }
         }
 
         static int CountEnemies(DamageReceiver[] receivers)
@@ -627,8 +688,15 @@ namespace CupheadOnline.Sync
             if (go == null)
                 return false;
 
+            // Names never change at runtime, so the lowercase+Contains scan only
+            // has to happen once per object.
+            int id = go.GetInstanceID();
+            bool bossLike;
+            if (_bossNameCache.TryGetValue(id, out bossLike))
+                return bossLike;
+
             string name = go.name.ToLowerInvariant();
-            return name.Contains("boss")
+            bossLike = name.Contains("boss")
                 || name.Contains("baroness")
                 || name.Contains("dragon")
                 || name.Contains("robot")
@@ -642,6 +710,8 @@ namespace CupheadOnline.Sync
                 || name.Contains("flower")
                 || name.Contains("blimp")
                 || name.Contains("bee");
+            _bossNameCache[id] = bossLike;
+            return bossLike;
         }
 
         static void ApplyLevelBossHealth(EnemyStatePacket pkt)
@@ -656,10 +726,9 @@ namespace CupheadOnline.Sync
             if (properties == null)
                 return;
 
-            var type = properties.GetType();
-            const BindingFlags propertyFlags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
-            var currentProperty = type.GetProperty("CurrentHealth", propertyFlags);
-            var totalField = type.GetField("TotalHealth", propertyFlags);
+            var accessor = GetBossHealthAccessor(properties.GetType());
+            var currentProperty = accessor.CurrentHealth;
+            var totalField = accessor.TotalHealth;
             if (currentProperty == null || !currentProperty.CanRead || totalField == null)
                 return;
 
@@ -668,7 +737,7 @@ namespace CupheadOnline.Sync
                 float total = Mathf.Max(1f, pkt.BossTotalHp);
                 float hp = Mathf.Clamp(pkt.BossHp, 0f, total);
                 float current = (float)currentProperty.GetValue(properties, null);
-                var dealDamage = FindInstanceMethod(type, "DealDamage");
+                var dealDamage = accessor.DealDamage;
                 LogBossHealthAuthority("before", hp, total, current, currentProperty.CanWrite, dealDamage != null);
                 if (hp < current - 0.01f)
                 {
@@ -705,10 +774,9 @@ namespace CupheadOnline.Sync
             if (properties == null)
                 return false;
 
-            var type = properties.GetType();
-            const BindingFlags propertyFlags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
-            var currentProperty = type.GetProperty("CurrentHealth", propertyFlags);
-            var totalField = type.GetField("TotalHealth", propertyFlags);
+            var accessor = GetBossHealthAccessor(properties.GetType());
+            var currentProperty = accessor.CurrentHealth;
+            var totalField = accessor.TotalHealth;
             if (currentProperty == null || totalField == null)
                 return false;
 
@@ -750,6 +818,23 @@ namespace CupheadOnline.Sync
                 + ".");
         }
 
+        static BossHealthAccessor GetBossHealthAccessor(System.Type type)
+        {
+            BossHealthAccessor accessor;
+            if (_bossHealthAccessors.TryGetValue(type, out accessor))
+                return accessor;
+
+            const BindingFlags propertyFlags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+            accessor = new BossHealthAccessor
+            {
+                CurrentHealth = type.GetProperty("CurrentHealth", propertyFlags),
+                TotalHealth = type.GetField("TotalHealth", propertyFlags),
+                DealDamage = FindInstanceMethod(type, "DealDamage"),
+            };
+            _bossHealthAccessors[type] = accessor;
+            return accessor;
+        }
+
         static MethodInfo FindInstanceMethod(System.Type type, string name)
         {
             const BindingFlags flags = BindingFlags.Instance
@@ -773,19 +858,26 @@ namespace CupheadOnline.Sync
             if (Level.Current == null)
                 return null;
 
-            var type = Level.Current.GetType();
-            while (type != null)
+            var levelType = Level.Current.GetType();
+            FieldInfo field;
+            if (!_levelPropertiesFields.TryGetValue(levelType, out field))
             {
-                var field = type.GetField("properties", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
-                if (field != null)
+                var type = levelType;
+                while (type != null)
                 {
-                    try { return field.GetValue(Level.Current); }
-                    catch { return null; }
+                    field = type.GetField("properties", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+                    if (field != null)
+                        break;
+                    type = type.BaseType;
                 }
-                type = type.BaseType;
+                _levelPropertiesFields[levelType] = field;
             }
 
-            return null;
+            if (field == null)
+                return null;
+
+            try { return field.GetValue(Level.Current); }
+            catch { return null; }
         }
     }
 }

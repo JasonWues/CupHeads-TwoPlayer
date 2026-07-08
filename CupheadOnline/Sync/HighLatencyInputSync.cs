@@ -8,6 +8,7 @@ namespace CupheadOnline.Sync
     internal static class HighLatencyInputSync
     {
         const float EnableThresholdSeconds = 0.15f;
+        const float DisableThresholdSeconds = 0.12f;
         const float SafetyMarginSeconds = 0.40f;
         const int MaxQueuedFrames = 2048;
 
@@ -34,6 +35,7 @@ namespace CupheadOnline.Sync
 
         static float _levelClockStartedAt = -1f;
         static float _lastModeLogAt = -1f;
+        static bool _highLatencyActive;
 
         static HighLatencyInputSync()
         {
@@ -44,10 +46,33 @@ namespace CupheadOnline.Sync
         {
             get
             {
-                return MultiplayerSession.IsActive
-                    && Plugin.VanillaTwoPlayerOnline
-                    && IsInLevelScene()
-                    && GetDelaySeconds() >= EnableThresholdSeconds;
+                if (!MultiplayerSession.IsActive
+                    || !Plugin.VanillaTwoPlayerOnline
+                    || !IsInLevelScene())
+                {
+                    _highLatencyActive = false;
+                    return false;
+                }
+
+                // Decide on the RAW one-way estimate. GetDelaySeconds() adds the
+                // 0.4 s playout safety margin, so comparing it against the enable
+                // threshold made the mode turn on for ANY measured ping — putting
+                // delay-based input on low-latency sessions where it hurts feel.
+                // The margin belongs to the playout schedule only, and hysteresis
+                // keeps a ping sample bouncing around the threshold from flapping
+                // the whole input model every three seconds.
+                float oneWay = EstimateOneWaySeconds();
+                if (_highLatencyActive)
+                {
+                    if (oneWay < DisableThresholdSeconds)
+                        _highLatencyActive = false;
+                }
+                else if (oneWay >= EnableThresholdSeconds)
+                {
+                    _highLatencyActive = true;
+                }
+
+                return _highLatencyActive;
             }
         }
 
@@ -78,6 +103,7 @@ namespace CupheadOnline.Sync
             _localStates.Clear();
             _levelClockStartedAt = -1f;
             _lastModeLogAt = -1f;
+            _highLatencyActive = false;
         }
 
         public static void ResetLevelClock()
@@ -86,6 +112,7 @@ namespace CupheadOnline.Sync
             ResetRemoteBuiltInInputs();
             _levelClockStartedAt = -1f;
             _lastModeLogAt = -1f;
+            _highLatencyActive = false;
         }
 
         public static void NotifyLevelStartReleased()

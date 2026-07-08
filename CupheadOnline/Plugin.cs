@@ -28,6 +28,7 @@ namespace CupheadOnline
         public static SteamNetManager  Net      { get; private set; }
 
         static ConfigEntry<bool> _cfgShowConnectionHud;
+        static ConfigEntry<string> _cfgLanguage;
         static ConfigEntry<bool> _cfgVerboseLogging;
         static ConfigEntry<bool> _cfgAutoOpenSteamFriends;
         static ConfigEntry<bool> _cfgAutoExportBugReports;
@@ -68,6 +69,7 @@ namespace CupheadOnline
         static int _previousVSyncCount;
 
         public static bool ShowConnectionHud => _cfgShowConnectionHud == null || _cfgShowConnectionHud.Value;
+        public static string LanguageMode => _cfgLanguage == null ? "Auto" : (_cfgLanguage.Value ?? "Auto").Trim();
         public static bool VerboseLoggingEnabled => _cfgVerboseLogging != null && _cfgVerboseLogging.Value;
         public static bool AutoOpenSteamFriends => _cfgAutoOpenSteamFriends != null && _cfgAutoOpenSteamFriends.Value;
         public static bool AutoExportBugReports => _cfgAutoExportBugReports == null || _cfgAutoExportBugReports.Value;
@@ -130,6 +132,10 @@ namespace CupheadOnline
 
             _cfgShowConnectionHud = Config.Bind("UI", "ShowConnectionHud", true,
                 "Show the in-game connection HUD with status and ping quality.");
+            _cfgLanguage = Config.Bind("UI", "Language", "Auto",
+                new ConfigDescription(
+                    "Mod UI language. Auto follows the game language. / 界面语言：Auto 跟随游戏语言，Chinese 强制中文，English 强制英文。",
+                    new AcceptableValueList<string>("Auto", "English", "Chinese")));
             _cfgVerboseLogging = Config.Bind("Debug", "VerboseLogging", false,
                 "Enable extra diagnostic logging for menu and network helpers.");
             _cfgAutoOpenSteamFriends = Config.Bind("UI", "AutoOpenSteamFriendsOnJoin", false,
@@ -208,10 +214,14 @@ namespace CupheadOnline
             Net = new SteamNetManager();
             Net.OnStatusChanged += msg =>
             {
-                // Animate dots on "waiting" messages; plain display otherwise
+                // Animate dots on "waiting" messages; plain display otherwise.
+                // Chinese statuses use 等待/正在/连接中 as the waiting markers.
                 bool animate = msg.IndexOf("Waiting", StringComparison.OrdinalIgnoreCase) >= 0
                             || msg.IndexOf("Connecting", StringComparison.OrdinalIgnoreCase) >= 0
-                            || msg.IndexOf("Creating", StringComparison.OrdinalIgnoreCase) >= 0;
+                            || msg.IndexOf("Creating", StringComparison.OrdinalIgnoreCase) >= 0
+                            || msg.IndexOf("等待", StringComparison.Ordinal) >= 0
+                            || msg.IndexOf("正在", StringComparison.Ordinal) >= 0
+                            || msg.IndexOf("连接中", StringComparison.Ordinal) >= 0;
                 MpMenuState.SetStatus(msg, animate);
                 Log.LogInfo("[Net] " + msg);
             };

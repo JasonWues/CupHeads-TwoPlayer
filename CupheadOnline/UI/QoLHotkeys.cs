@@ -26,7 +26,7 @@ namespace CupheadOnline.UI
             {
                 _lastHotkeyAt = Time.unscaledTime;
                 bool enabled = Plugin.ToggleBossHealthBars();
-                ConnectionHUD.Show(enabled ? "Boss health bars enabled." : "Boss health bars disabled.");
+                ConnectionHUD.Show(enabled ? Loc.T("Boss health bars enabled.") : Loc.T("Boss health bars disabled."));
                 return;
             }
 
@@ -41,7 +41,7 @@ namespace CupheadOnline.UI
             {
                 _lastHotkeyAt = Time.unscaledTime;
                 bool enabled = Plugin.ToggleBattleAssistHud();
-                ConnectionHUD.Show(enabled ? "Battle assist HUD enabled." : "Battle assist HUD disabled.");
+                ConnectionHUD.Show(enabled ? Loc.T("Battle assist HUD enabled.") : Loc.T("Battle assist HUD disabled."));
                 return;
             }
 
@@ -56,7 +56,7 @@ namespace CupheadOnline.UI
         {
             if (!MultiplayerSession.IsActive || Plugin.Net == null || !Plugin.Net.IsConnected)
             {
-                ConnectionHUD.Show("No active multiplayer session to resync.");
+                ConnectionHUD.Show(Loc.T("No active multiplayer session to resync."));
                 return;
             }
 
@@ -69,7 +69,7 @@ namespace CupheadOnline.UI
             string report = Plugin.BuildDiagnosticsReport();
             GUIUtility.systemCopyBuffer = report;
             Plugin.Log.LogInfo("[QoL] Diagnostics copied to clipboard.");
-            ConnectionHUD.Show("Diagnostics copied to clipboard.");
+            ConnectionHUD.Show(Loc.T("Diagnostics copied to clipboard."));
         }
     }
 }

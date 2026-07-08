@@ -116,9 +116,9 @@ namespace CupheadOnline.UI
             _bgImage.color = BgGoodColour;
 
             _titleLabel = MakeLabel(bg, "CUPHEAD ONLINE", 13, OkayColour, new Vector2(0f, 40f), new Vector2(270f, 20f));
-            _pingLabel = MakeLabel(bg, "PING ---", 13, OkayColour, new Vector2(0f, 20f), new Vector2(270f, 20f));
+            _pingLabel = MakeLabel(bg, Loc.T("PING ---"), 13, OkayColour, new Vector2(0f, 20f), new Vector2(270f, 20f));
 
-            _statusLabel = MakeLabel(bg, "Waiting for peer...", 10, TextColour, new Vector2(0f, -4f), new Vector2(270f, 24f));
+            _statusLabel = MakeLabel(bg, Loc.T("Waiting for peer..."), 10, TextColour, new Vector2(0f, -4f), new Vector2(270f, 24f));
             _statusLabel.horizontalOverflow = HorizontalWrapMode.Wrap;
             _statusLabel.verticalOverflow = VerticalWrapMode.Overflow;
 
@@ -154,11 +154,11 @@ namespace CupheadOnline.UI
             }
 
             if (_pingLabel != null && string.IsNullOrEmpty(_pingLabel.text))
-                _pingLabel.text = "PING ---";
+                _pingLabel.text = Loc.T("PING ---");
 
             if (_statusLabel != null)
             {
-                _statusLabel.text = string.IsNullOrEmpty(status) ? "Steam P2P connected." : status;
+                _statusLabel.text = string.IsNullOrEmpty(status) ? Loc.T("Steam P2P connected.") : status;
                 _statusLabel.color = TextColour;
             }
 
@@ -176,19 +176,19 @@ namespace CupheadOnline.UI
 
             if (ms < 80)
             {
-                quality = "GOOD";
+                quality = Loc.T("GOOD");
                 accent = GoodColour;
                 bg = BgGoodColour;
             }
             else if (ms < 150)
             {
-                quality = "OKAY";
+                quality = Loc.T("OKAY");
                 accent = OkayColour;
                 bg = BgOkayColour;
             }
             else
             {
-                quality = "POOR";
+                quality = Loc.T("POOR");
                 accent = PoorColour;
                 bg = BgPoorColour;
             }
@@ -198,12 +198,12 @@ namespace CupheadOnline.UI
 
             if (_pingLabel != null)
             {
-                _pingLabel.text = "PING " + ms + "ms - " + quality;
+                _pingLabel.text = Loc.F("PING {0}ms - {1}", ms, quality);
                 _pingLabel.color = accent;
             }
 
             if (_statusLabel != null && string.IsNullOrEmpty(_statusLabel.text))
-                _statusLabel.text = "Steam P2P connected.";
+                _statusLabel.text = Loc.T("Steam P2P connected.");
 
             if (_bgImage != null)
                 _bgImage.color = bg;
@@ -225,13 +225,13 @@ namespace CupheadOnline.UI
 
             if (_pingLabel != null)
             {
-                _pingLabel.text = "DISCONNECTED";
+                _pingLabel.text = Loc.T("DISCONNECTED");
                 _pingLabel.color = DisconnectedColour;
             }
 
             if (_statusLabel != null)
             {
-                _statusLabel.text = string.IsNullOrEmpty(reason) ? "Connection closed." : reason;
+                _statusLabel.text = string.IsNullOrEmpty(reason) ? Loc.T("Connection closed.") : reason;
                 _statusLabel.color = new Color(1f, 0.78f, 0.72f, 1f);
             }
 
@@ -247,7 +247,7 @@ namespace CupheadOnline.UI
 
             if (_showingDisconnectedState)
             {
-                string retryHint = "Open Multiplayer to retry.";
+                string retryHint = Loc.T("Open Multiplayer to retry.");
                 if (_metaLabel.text != retryHint)
                     _metaLabel.text = retryHint;
                 _metaLabel.color = new Color(1f, 0.74f, 0.66f, 0.92f);
@@ -289,7 +289,7 @@ namespace CupheadOnline.UI
                     }
                 }
 
-                string line = (Plugin.Net.IsHost ? "HOST" : "CLIENT")
+                string line = (Plugin.Net.IsHost ? Loc.T("HOST") : Loc.T("CLIENT"))
                     + " "
                     + MultiplayerSession.GetLocalCharacterName()
                     + " | "
@@ -303,10 +303,10 @@ namespace CupheadOnline.UI
                     line += " | HP x" + BossHealthScaler.CurrentMultiplier.ToString("0.00");
 
                 if (Plugin.Net.IsHost && Plugin.Net.PendingPeerCount > 0)
-                    line += " | +" + Plugin.Net.PendingPeerCount + " queued";
+                    line += " | +" + Plugin.Net.PendingPeerCount + Loc.T(" queued");
 
                 if (ExtraParticipantTracker.TotalCount > 0)
-                    line += " | +" + ExtraParticipantTracker.TotalCount + " extra";
+                    line += " | +" + ExtraParticipantTracker.TotalCount + Loc.T(" extra");
 
                 line += " | " + FormatElapsed(Time.unscaledTime - _connectedAt);
 
@@ -328,7 +328,7 @@ namespace CupheadOnline.UI
 
             if (Plugin.Net.IsInLobby)
             {
-                string lobbyLine = Plugin.Net.IsHost ? "HOST LOBBY" : "IN LOBBY";
+                string lobbyLine = Plugin.Net.IsHost ? Loc.T("HOST LOBBY") : Loc.T("IN LOBBY");
                 string lobbyId = ShortLobbyId(Plugin.Net.CurrentLobbyId);
                 if (!string.IsNullOrEmpty(lobbyId))
                     lobbyLine += " | #" + lobbyId;
@@ -354,7 +354,7 @@ namespace CupheadOnline.UI
         static string ShortenPeerName(string name)
         {
             if (string.IsNullOrEmpty(name) || name == "Unknown Player")
-                return "Peer";
+                return Loc.T("Peer");
 
             return name.Length <= 14 ? name : name.Substring(0, 13) + "...";
         }
@@ -391,6 +391,7 @@ namespace CupheadOnline.UI
             t.color = colour;
             t.alignment = TextAnchor.MiddleCenter;
             t.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+            Loc.EnsureCjkFont(t);
             return t;
         }
     }
